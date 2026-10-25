@@ -1,0 +1,11 @@
+# Aditya-L1 only: train on one observation window and hold out blocks (small-data setting).
+seed: 42
+run_name: aditya
+data: {block_days: 1}
+sources:
+  - name: aditya_l1
+    kind: aditya_l1
+    role: train
+    params:
+      solexs_path: /data/AL1_SOLEXS_20260623_SDD2_L1.lc
+      hel1os_dirs: [/data/hel1os/HLS_20260623_000007_43181sec_lev1_V111]

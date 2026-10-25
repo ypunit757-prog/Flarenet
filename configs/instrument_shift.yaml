@@ -1,0 +1,89 @@
+# Instrument-shift benchmark: train on the synthetic detector, test on the SAME synthetic Sun seen
+# through other (simulated) detectors. Simulated shift only: says nothing about real ISRO/NASA data.
+#   flarenet experiment -c configs/instrument_shift.yaml -e configs/experiments/instrument_shift.yaml --out runs/shift --jobs 2
+seed: 42
+run_name: instrument_shift
+paths:
+  data_dir: data
+  runs_dir: runs
+data:
+  window_min: 90
+  stride_min: 60
+  train_stride_min: 60
+  horizon_min: 360
+  block_days: 3
+  train_frac: 0.7
+  val_frac: 0.15
+  max_missing_frac: 1.0
+features:
+  channels: null
+model:
+  name: flarenet
+  cnn_channels: 32
+  nowcast_hidden: 32
+  forecast_hidden: 40
+  dropout: 0.35
+training:
+  epochs: 35
+  patience: 8
+  batch_size: 256
+  lr: 0.0005
+  min_lr: 5.0e-06
+  weight_decay: 0.0001
+  label_smoothing: 0.08
+  focal_gamma: 2.0
+  forecast_loss_weight: 2.5
+  positive_oversample: 3.0
+  grad_clip: 5.0
+  device: auto
+  ensemble_size: 1
+  nowcast_bias_tuning: true
+  finetune_from: null
+  freeze_encoder: false
+  refit_normaliser: true
+evaluation:
+  bootstrap_n: 200
+  bootstrap_block_hours: 72
+  calibration_bins: 10
+sources:
+- name: synthetic
+  kind: synthetic
+  role: train
+  params:
+    n_days: 150
+- name: ctrl_same_detector
+  kind: synthetic_instrument
+  role: eval
+  params:
+    n_days: 60
+    seed: 9001
+- name: shift_gain_noise
+  kind: synthetic_instrument
+  role: eval
+  params:
+    n_days: 60
+    seed: 9002
+    gain: 40.0
+    noise_frac: 0.05
+    hxr_mode: scaled
+    hxr_gain: 3.0
+- name: shift_no_hard_channel
+  kind: synthetic_instrument
+  role: eval
+  params:
+    n_days: 60
+    seed: 9003
+    gain: 0.02
+    power: 1.15
+    hxr_mode: none
+- name: shift_noisy_background
+  kind: synthetic_instrument
+  role: eval
+  params:
+    n_days: 60
+    seed: 9004
+    gain: 5.0
+    background_frac: 1.0
+    noise_frac: 0.25
+    hxr_mode: scaled
+    hxr_gain: 30.0

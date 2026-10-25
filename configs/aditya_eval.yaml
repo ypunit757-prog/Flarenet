@@ -1,0 +1,24 @@
+# Score a trained checkpoint on India's Aditya-L1 (SoLEXS soft X-ray + HEL1OS hard X-ray) only. No GOES download.
+#   uv run flarenet evaluate -c configs/aditya_eval.yaml --checkpoint runs/goes_active/checkpoint.pt --run-name aditya_eval
+# Use a checkpoint trained with features.relative=true (goes_active). An absolute-feature checkpoint
+# (goes_recent, goes_active_abs) reads Aditya count rates as wrong flux levels and fails.
+# EDIT the paths below to your own files. Several days or weeks are needed for meaningful scores; one day is
+# only a smoke test.
+#
+# Labels for Aditya are a RELATIVE PROXY (multiples of the quiet SoLEXS rate), not GOES classes, so the scores
+# are NOT comparable with the GOES numbers. For calibrated classes, see docs/UNIVERSAL_INSTRUMENTS.md
+# (scaling: goes_calibrated with a GOES reference CSV for the same days).
+seed: 42
+run_name: aditya_eval
+data:
+  max_missing_frac: 0.25
+features:
+  relative: true
+sources:
+  - name: aditya_l1
+    kind: aditya_l1
+    role: eval
+    params:
+      solexs_path: /path/to/AL1_SOLEXS_YYYYMMDD_SDD2_L1.lc
+      hel1os_dirs:
+        - /path/to/hel1os/HLS_YYYYMMDD_..._lev1_V111

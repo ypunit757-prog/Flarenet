@@ -1,0 +1,13 @@
+# Stage 2: the changes that helped in stage 1 (finer training windows, nowcast class offsets),
+# alone and combined with an ensemble and a longer input window. Same seeds as the baseline.
+#   flarenet experiment -e configs/experiments/stage2_combinations.yaml --out runs/stage2 --jobs 2
+# Read the "paired difference" table in summary.md: keep a change only if it is positive on most seeds.
+seeds: [1, 2, 3, 4, 5]
+baseline: baseline
+variants:
+  baseline: []
+  now_bias: ["training.nowcast_bias_tuning=true"]
+  s30_bias: ["data.train_stride_min=30", "training.nowcast_bias_tuning=true"]
+  s15_bias: ["data.train_stride_min=15", "training.nowcast_bias_tuning=true"]
+  ens3_bias: ["training.ensemble_size=3", "training.nowcast_bias_tuning=true"]
+  win240_bias: ["data.window_min=240", "training.nowcast_bias_tuning=true"]

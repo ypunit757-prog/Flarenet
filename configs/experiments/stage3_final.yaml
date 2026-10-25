@@ -1,0 +1,11 @@
+# Stage 3: the combined candidate against the original, on seeds 6-8 first (never used to choose it)
+# and then on seeds 1-5 (used to shortlist it in stage 2).
+#   flarenet experiment -e configs/experiments/stage3_final.yaml --out runs/stage3 --jobs 2
+seeds: [6, 7, 8, 1, 2, 3, 4, 5]
+baseline: baseline
+variants:
+  baseline: []
+  s30_ens3_bias:
+    - "data.train_stride_min=30"
+    - "training.ensemble_size=3"
+    - "training.nowcast_bias_tuning=true"

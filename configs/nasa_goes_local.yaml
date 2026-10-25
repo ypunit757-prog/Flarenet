@@ -1,0 +1,12 @@
+# Bring your own NASA/NOAA files (no network needed): NCEI/CDAWeb NetCDF, SWPC JSON, or CSV.
+#   flarenet run -c configs/nasa_goes_local.yaml
+# For CSV exported from SunPy/Fido, CDAWeb or a spreadsheet, set time_column / sxr_column /
+# hxr_column (see docs/NASA_DATA.md). hxr_column: null if you only have the long channel.
+seed: 42
+run_name: nasa_local
+sources:
+  - name: goes_local
+    kind: nasa_goes_file
+    role: train
+    params:
+      paths: ["data/downloads/goes_xrs/*.nc"]

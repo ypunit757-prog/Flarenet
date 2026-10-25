@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+build/
+dist/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# FlareNet run outputs and downloaded data (large, reproducible)
+runs/
+outputs/
+data/
+*.pt
+# ...except the deployed model and the API's bundled demo payload
+!models/
+!models/flarenet.pt
+!backend/data/
+backend/data/*
+!backend/data/forecast.json
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/public/data.json
+*.log
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+
+# Forward-test outputs from local runs (the log lives on the data branch)
+forward_log.csv
+forward_report.md
+daily_outlook.json
+out/

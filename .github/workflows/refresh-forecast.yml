@@ -1,0 +1,51 @@
+name: Refresh forecast
+
+# Runs the model on live NOAA SWPC X-ray data and publishes the result to the `data` branch.
+# The Render API reads that file through FORECAST_URL, so the site updates without a redeploy.
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes (GitHub may delay scheduled runs)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-forecast
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for a model
+        id: model
+        run: |
+          if [ -f models/flarenet.pt ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "No models/flarenet.pt committed, skipping."; fi
+      - uses: actions/setup-python@v5
+        if: steps.model.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install (CPU PyTorch)
+        if: steps.model.outputs.ok == 'true'
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+      - name: Export forecast from live SWPC data
+        if: steps.model.outputs.ok == 'true'
+        run: |
+          python scripts/export_web.py -c configs/live_swpc.yaml --checkpoint models/flarenet.pt \
+            --source swpc_live --days 7 --out out/forecast.json
+      - name: Publish to the data branch
+        if: steps.model.outputs.ok == 'true'
+        run: |
+          git config user.name "flarenet-bot"
+          git config user.email "flarenet-bot@users.noreply.github.com"
+          git fetch origin data || true
+          if git rev-parse --verify origin/data >/dev/null 2>&1; then git checkout -B data origin/data; else git checkout --orphan data && git rm -rf . >/dev/null 2>&1 || true; fi
+          cp out/forecast.json forecast.json
+          git add forecast.json
+          git commit -m "forecast $(date -u +%FT%TZ)" || echo "nothing to commit"
+          git push origin data || { git pull --rebase origin data && git push origin data; }

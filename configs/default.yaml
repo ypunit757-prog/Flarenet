@@ -1,0 +1,52 @@
+# Default run: synthetic lightcurve only (pipeline sanity check, no downloads needed).
+# Every key can be overridden: flarenet run --set training.epochs=5 --set sources.0.params.n_days=30
+seed: 42
+run_name: default
+paths:
+  data_dir: data         # raw / processed / features caches
+  runs_dir: runs         # one folder per run: checkpoint, reports, figures
+data:
+  window_min: 90         # model input length (minutes)
+  stride_min: 60         # step between windows (val/test grid)
+  train_stride_min: 30   # finer stride for TRAIN windows only: 2x more (overlapping) training windows
+  horizon_min: 360       # forecast: does an M/X flare start within this time?
+  block_days: 3          # contiguous days kept together in the split
+  train_frac: 0.70
+  val_frac: 0.15
+  max_missing_frac: 1.0  # drop windows with more missing samples than this (1.0 = keep all)
+features:
+  channels: null         # null = all 12; or a list, e.g. drop recent_flare_rate_6h
+model:
+  name: flarenet
+  cnn_channels: 32
+  nowcast_hidden: 32
+  forecast_hidden: 40
+  dropout: 0.35
+training:
+  epochs: 35
+  patience: 8            # early stopping on validation TSS
+  batch_size: 256
+  lr: 5.0e-4
+  min_lr: 5.0e-6
+  weight_decay: 1.0e-4
+  label_smoothing: 0.08
+  focal_gamma: 2.0
+  forecast_loss_weight: 2.5
+  positive_oversample: 3.0
+  grad_clip: 5.0
+  device: auto           # auto | cpu | cuda | mps
+  ensemble_size: 3       # members trained with different seeds, probabilities averaged
+  nowcast_bias_tuning: true  # per-class logit offsets tuned on validation for nowcast macro-F1
+  finetune_from: null    # path to a checkpoint to start from
+  freeze_encoder: false
+  refit_normaliser: true
+evaluation:
+  bootstrap_n: 200       # 0 disables confidence intervals
+  bootstrap_block_hours: 72
+  calibration_bins: 10
+sources:
+  - name: synthetic
+    kind: synthetic
+    role: train          # train = split into train/val/test blocks; eval = never trained on
+    params:
+      n_days: 200

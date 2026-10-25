@@ -1,0 +1,9 @@
+# Near-real-time forecasts from the NOAA SWPC GOES X-ray feed (updates every minute).
+#   flarenet monitor -c configs/live_monitor.yaml --checkpoint runs/nasa_goes/checkpoint.pt
+# Appends one row per tick to runs/live/alerts.csv. Use a checkpoint trained on GOES data.
+run_name: live
+monitor:
+  product: xrays-1-day       # xrays-6-hour | xrays-1-day | xrays-3-day | xrays-7-day
+  satellite: primary
+  interval_s: 60
+  min_context_min: 450

@@ -1,0 +1,67 @@
+name: Daily forward-test log
+
+# Every day just after NOAA issues its flare forecast (22:00 UTC) this job
+#   1. reads the last 7 days of GOES X-rays and the sunspot-region summary from NOAA SWPC,
+#   2. records tomorrow's FlareNet forecast and NOAA's own forecast in forward_log.csv (a day is never rewritten),
+#   3. fills in the outcome of earlier days, and
+#   4. publishes forward_log.csv and forward_report.md to the `data` branch.
+# It needs a frozen model committed as models/daily_model_live.pkl (see docs/FORWARD_TEST.md). Do not replace
+# that file while the test runs: a new model needs a new log.
+on:
+  schedule:
+    - cron: "20 22 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-forward-log
+  cancel-in-progress: false
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for the frozen model
+        id: model
+        run: |
+          if [ -f models/daily_model_live.pkl ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "No models/daily_model_live.pkl committed, skipping."; fi
+      - uses: actions/setup-python@v5
+        if: steps.model.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install (CPU PyTorch)
+        if: steps.model.outputs.ok == 'true'
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+      - name: Get the existing log from the data branch
+        if: steps.model.outputs.ok == 'true'
+        run: |
+          git fetch origin data || true
+          mkdir -p out
+          if git rev-parse --verify origin/data >/dev/null 2>&1 && git cat-file -e origin/data:forward_log.csv 2>/dev/null; then
+            git show origin/data:forward_log.csv > out/forward_log.csv
+          fi
+      - name: Record today's forecast and resolve earlier days
+        if: steps.model.outputs.ok == 'true'
+        run: |
+          python scripts/daily_predict.py --model models/daily_model_live.pkl --log out/forward_log.csv --out out/daily_outlook.json
+      - name: Score what has resolved so far
+        if: steps.model.outputs.ok == 'true'
+        run: |
+          python scripts/daily_forward_score.py out/forward_log.csv --model models/daily_model_live.pkl --out out/forward_report.md || echo "scoring failed; the log is still published"
+      - name: Publish to the data branch
+        if: steps.model.outputs.ok == 'true'
+        run: |
+          git config user.name "flarenet-bot"
+          git config user.email "flarenet-bot@users.noreply.github.com"
+          if git rev-parse --verify origin/data >/dev/null 2>&1; then git checkout -B data origin/data; else git checkout --orphan data && git rm -rf . >/dev/null 2>&1 || true; fi
+          cp out/forward_log.csv forward_log.csv
+          cp out/forward_report.md forward_report.md 2>/dev/null || true
+          git add forward_log.csv forward_report.md 2>/dev/null || git add forward_log.csv
+          git commit -m "forward log $(date -u +%F)" || echo "nothing to commit"
+          git push origin data || { git pull --rebase origin data && git push origin data; }

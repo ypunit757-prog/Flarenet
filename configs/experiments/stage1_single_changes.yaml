@@ -1,0 +1,19 @@
+# Stage 1: every candidate improvement on its own, against the original behaviour, same seeds.
+#   flarenet experiment -e configs/experiments/stage1_single_changes.yaml --out runs/stage1 --jobs 2
+# Each seed is a different synthetic world, split and initialisation. Read the "paired difference"
+# table in summary.md: keep a change only if it is positive on most seeds.
+seeds: [1, 2, 3, 4, 5, 6, 7, 8]
+baseline: baseline
+variants:
+  baseline: []
+  balance_auto: ["training.forecast_balance=auto"]
+  ema: ["training.ema_decay=0.95"]
+  sel_auc: ["training.select_metric=auc"]
+  sel_tss_auc: ["training.select_metric=tss_auc"]
+  thr_smooth: ["training.threshold_smooth=5"]
+  stride15: ["data.train_stride_min=15"]
+  now_arch: ["model.nowcast_skip=true", "model.nowcast_pool=final_states"]
+  now_w1: ["training.nowcast_weight_power=1.0", "training.nowcast_weight_cap=20"]
+  now_bias: ["training.nowcast_bias_tuning=true"]
+  purge: ["data.purge=true"]
+  wide: ["model.cnn_channels=48", "model.nowcast_hidden=48", "model.forecast_hidden=64"]

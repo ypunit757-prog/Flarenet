@@ -1,0 +1,17 @@
+# Render Blueprint: New > Blueprint > pick this repo. Creates the API service.
+services:
+  - type: web
+    name: flarenet-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: FRONTEND_ORIGIN
+        sync: false        # set to your Vercel URL, e.g. https://flarenet.vercel.app
+      - key: FORECAST_URL
+        sync: false        # raw URL of forecast.json on the `data` branch (see docs/DEPLOY.md)

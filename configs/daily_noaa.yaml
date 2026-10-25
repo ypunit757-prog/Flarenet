@@ -1,0 +1,50 @@
+# Day-level M-class forecaster scored against NOAA's own archived forecasts on the SAME days.
+#
+#   uv run flarenet noaa-text --start 2017-03-01 --end 2026-10-01     # optional: check the NOAA text parsers first
+#   uv run flarenet daily -c configs/daily_noaa.yaml                  # ~10-40 min the first time (downloads), then cached
+#
+# Output: runs/daily_noaa/daily_report.md (read it first), daily_metrics.json, predictions.csv,
+#         daily_model.pkl and daily_model_live.pkl (for scripts/daily_predict.py).
+# GOES-16 was the primary satellite until 2025-04-07, GOES-18 after that. Edit the dates to match the data you want.
+# Needs: uv sync --python 3.12 --extra netcdf   (the GOES files are NetCDF)
+seed: 42
+run_name: daily_noaa
+data:
+  max_missing_frac: 0.25
+paths:
+  data_dir: data
+  runs_dir: runs
+
+sources:
+  - name: goes16
+    kind: nasa_goes_ncei
+    role: train
+    params:
+      satellite: 16
+      start: 2017-03-01
+      end: 2025-04-07
+      max_missing_days: 120
+      workers: 4
+  - name: goes18
+    kind: nasa_goes_ncei
+    role: train
+    params:
+      satellite: 18
+      start: 2025-04-08
+      end: 2026-09-30
+      max_missing_days: 30
+      workers: 4
+
+daily:
+  target: M              # M or X; the same run with `--set daily.target=X` scores the X-class forecast
+  issue_hour_utc: 22     # NOAA issues its daily forecast at 22:00 UTC; the model gets only data up to then
+  use_regions: true      # NOAA sunspot-region summaries (the information NOAA's forecasters use)
+  compare_noaa: true
+  mode: walk_forward     # every test day is predicted by a model trained only on earlier days
+  min_train_days: 730
+  step_days: 90
+  gap_days: 3
+  calibration: platt
+  ablate: true           # also scores flux-only / +history / +rotation / +regions so you see what helps
+  bootstrap_n: 1000
+  bootstrap_block_days: 14

@@ -1,0 +1,12 @@
+# Live GOES X-ray data from NOAA SWPC (last 7 days, 1-minute), used by the scheduled web refresh:
+#   uv run python scripts/export_web.py -c configs/live_swpc.yaml --checkpoint models/flarenet.pt \
+#       --source swpc_live --days 7 --out backend/data/forecast.json
+# Use a checkpoint trained on GOES data with the same feature settings (relative or absolute) as the checkpoint itself carries.
+run_name: live_swpc
+sources:
+  - name: swpc_live
+    kind: nasa_goes_swpc
+    role: eval
+    params:
+      product: xrays-7-day
+      satellite: primary

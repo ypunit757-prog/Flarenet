@@ -1,0 +1,53 @@
+# Apple-silicon (M-series) GPU run: forces the MPS device and uses a bigger batch so the GPU has more work per step.
+#   flarenet device --batch-size 512     # measure first: for this small model CPU can be as fast
+#   flarenet run -c configs/mac_mps.yaml
+seed: 42
+run_name: mac_mps
+paths:
+  data_dir: data
+  runs_dir: runs
+data:
+  window_min: 90
+  stride_min: 60
+  train_stride_min: 30
+  horizon_min: 360
+  block_days: 3
+  train_frac: 0.7
+  val_frac: 0.15
+  max_missing_frac: 1.0
+features:
+  channels: null
+model:
+  name: flarenet
+  cnn_channels: 32
+  nowcast_hidden: 32
+  forecast_hidden: 40
+  dropout: 0.35
+training:
+  epochs: 35
+  patience: 8
+  batch_size: 512
+  lr: 0.0005
+  min_lr: 5.0e-06
+  weight_decay: 0.0001
+  label_smoothing: 0.08
+  focal_gamma: 2.0
+  forecast_loss_weight: 2.5
+  positive_oversample: 3.0
+  grad_clip: 5.0
+  device: mps
+  ensemble_size: 3
+  nowcast_bias_tuning: true
+  finetune_from: null
+  freeze_encoder: false
+  refit_normaliser: true
+evaluation:
+  bootstrap_n: 200
+  bootstrap_block_hours: 72
+  calibration_bins: 10
+sources:
+- name: synthetic
+  kind: synthetic
+  role: train
+  params:
+    n_days: 200

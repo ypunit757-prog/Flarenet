@@ -1,0 +1,149 @@
+{
+  "flarenet_version": "1.0.0",
+  "run_name": "default",
+  "config_fingerprint": "ab76edee65c26972",
+  "model": {
+    "parameters": 366261,
+    "channels": [
+      "log_sxr",
+      "log_hxr",
+      "d_log_sxr",
+      "d_log_hxr",
+      "d2_log_sxr",
+      "d2_log_hxr",
+      "hardness",
+      "max_sxr_2h",
+      "max_sxr_6h",
+      "ewma_sxr_4h",
+      "log_fluence_1h",
+      "recent_flare_rate_6h"
+    ],
+    "trained_on": [
+      "synthetic"
+    ],
+    "name": "flarenet",
+    "cnn_channels": 32,
+    "nowcast_hidden": 32,
+    "forecast_hidden": 40,
+    "dropout": 0.35,
+    "nowcast_skip": false,
+    "nowcast_pool": "last"
+  },
+  "window": {
+    "window_min": 90,
+    "stride_min": 60,
+    "horizon_min": 360
+  },
+  "alert_threshold": 0.5750806451612903,
+  "sources": {
+    "synthetic": {
+      "kind": "synthetic",
+      "role": "train",
+      "labeler": "precomputed",
+      "scaling": "native",
+      "label_kind": "synthetic ground truth",
+      "units": "arb. (W/m2-like)",
+      "minutes": 288000,
+      "span_days": 200.0,
+      "n_events": 3562,
+      "event_classes": {
+        "X": 2408,
+        "M": 864,
+        "B": 185,
+        "C": 105
+      },
+      "cross_check": null
+    }
+  },
+  "results": {
+    "synthetic": {
+      "accuracy": 0.8762626262626263,
+      "macro_F1": 0.7477315194255856,
+      "AUC": 0.8800637593349303,
+      "TSS": 0.655488234465267,
+      "HSS": 0.6025126278979407,
+      "POD": 0.8576158940397351,
+      "FAR": 0.0683453237410072,
+      "TSS_oracle": 0.6652811046921234,
+      "perclass": [
+        {
+          "class": "C",
+          "TP": 281,
+          "FP": 26,
+          "FN": 26,
+          "TN": 459,
+          "POD": 0.9153094462540716,
+          "FAR": 0.08469055374592833,
+          "TSS": 0.8617011988313912,
+          "HSS": 0.8617011988313913
+        },
+        {
+          "class": "M",
+          "TP": 266,
+          "FP": 28,
+          "FN": 21,
+          "TN": 477,
+          "POD": 0.926829268292683,
+          "FAR": 0.09523809523809523,
+          "TSS": 0.8713837237382275,
+          "HSS": 0.8668204093398674
+        },
+        {
+          "class": "X",
+          "TP": 165,
+          "FP": 21,
+          "FN": 17,
+          "TN": 589,
+          "POD": 0.9065934065934066,
+          "FAR": 0.11290322580645161,
+          "TSS": 0.8721671770852099,
+          "HSS": 0.8654939397189746
+        }
+      ],
+      "lead_time": {
+        "n_events": 482,
+        "n_hits": 460,
+        "n_late": 12,
+        "n_miss": 10,
+        "hit_rate": 0.9543568464730291,
+        "mean_min": 301.61739130434785,
+        "median_min": 325.0
+      },
+      "confidence_95": {
+        "TSS": [
+          0.4202395913545403,
+          0.8138463455522585
+        ],
+        "HSS": [
+          0.36697524644052504,
+          0.7456439528141942
+        ],
+        "POD": [
+          0.7777680616740088,
+          0.9301515151515152
+        ],
+        "FAR": [
+          0.022813755192125793,
+          0.11332558517352129
+        ],
+        "AUC": [
+          0.8150835355888543,
+          0.9376329991730623
+        ]
+      },
+      "calibration": {
+        "brier": 0.12873561848194828,
+        "ece": 0.14143833619627083
+      },
+      "kind": "test",
+      "n_windows": 792,
+      "forecast_positive_frac": 0.7626262903213501,
+      "dataset": "synthetic (held-out test)"
+    }
+  },
+  "caveats": [
+    "[synthetic] synthetic data: far more flare-active than the real Sun; use only as a pipeline sanity check, not as evidence of skill.",
+    "[synthetic] scored on held-out 3-day blocks of the same series used for training; this is not a test on a different period or instrument.",
+    "Feature 'recent_flare_rate_6h' is computed from flare labels; run with features.channels excluding it for a purely flux-based model."
+  ]
+}

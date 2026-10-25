@@ -1,0 +1,33 @@
+# Use every NOAA GOES XRS day available on NCEI: train on GOES-16 (2017 to 2025-04-07, the end of its archive),
+# test on GOES-18 after that (a different satellite and period the model never trained on).
+#   uv run flarenet run -c configs/noaa_all.yaml
+# The first run downloads thousands of daily files (resumable: re-run the same command if it stops; finished
+# days are cached in data/downloads/goes_xrs). Needs: uv sync --python 3.12 --extra netcdf
+# Days NOAA does not publish are skipped (max_missing_days is the most allowed to be missing).
+# 2017-2021 were quiet, so most flares come from 2022 onward; the model is trained on all of it.
+seed: 42
+run_name: goes_all
+data:
+  max_missing_frac: 0.25
+training:
+  epochs: 40
+  device: auto
+sources:
+  - name: goes16_all
+    kind: nasa_goes_ncei
+    role: train
+    params:
+      satellite: 16
+      start: 2017-03-01
+      end: 2025-04-07
+      max_missing_days: 120
+      workers: 4
+  - name: goes18_test
+    kind: nasa_goes_ncei
+    role: eval
+    params:
+      satellite: 18
+      start: 2025-04-08
+      end: 2026-09-30
+      max_missing_days: 30
+      workers: 4

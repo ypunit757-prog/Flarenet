@@ -1,0 +1,13 @@
+# Pre-train on synthetic data, then score on real GOES (no real training data needed first).
+# Expect weak transfer: this shows the size of the sim-to-real gap, it is not a headline result.
+seed: 42
+run_name: synthetic_to_goes
+sources:
+  - name: synthetic
+    kind: synthetic
+    role: train
+    params: {n_days: 200}
+  - name: goes16_may2024
+    kind: nasa_goes_ncei
+    role: eval
+    params: {satellite: 16, start: 2024-05-01, end: 2024-05-31}

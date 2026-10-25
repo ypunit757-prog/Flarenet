@@ -1,0 +1,37 @@
+# One model for several agencies' data: train on GOES (NASA/NOAA), test on other instruments.
+#   flarenet run -c configs/universal_multi_agency.yaml
+# Instrument independence comes from features.relative (levels measured against each detector's own
+# quiet baseline) plus augmentation that simulates other gains/noise and a missing hard channel.
+# To add another agency: copy the aditya_l1 block and change `kind` (see docs/UNIVERSAL_INSTRUMENTS.md):
+# nasa_goes_file reads any CSV/Parquet/NetCDF lightcurve (e.g. Chinese, Japanese, European detectors).
+seed: 42
+run_name: universal
+data:
+  max_missing_frac: 0.25
+features:
+  relative: true
+training:
+  epochs: 40
+  ensemble_size: 3
+  aug_hxr_dropout: 0.3
+  aug_noise_max: 0.15
+sources:
+  - name: goes16_train
+    kind: nasa_goes_ncei
+    role: train
+    params: {satellite: 16, start: 2022-01-01, end: 2023-12-31}
+  - name: goes18_2024
+    kind: nasa_goes_ncei
+    role: eval
+    params: {satellite: 18, start: 2024-03-01, end: 2024-09-30}
+  - name: aditya_l1
+    kind: aditya_l1
+    role: eval
+    # approximate GOES flux scale from a one-number quiet-Sun anchor; for real classes supply
+    # scaling_params: {reference_csv: goes_same_days.csv} to fit a calibration instead
+    scaling: goes_calibrated
+    scaling_params: {quiet_flux: 3.0e-9}
+    params:
+      solexs_path: /data/AL1_SOLEXS_20260623_SDD2_L1.lc
+      hel1os_dirs:
+        - /data/hel1os/HLS_20260623_000007_43181sec_lev1_V111

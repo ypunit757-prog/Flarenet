@@ -1,0 +1,19 @@
+# Which robustness option keeps the score when the detector changes? (see configs/instrument_shift.yaml)
+seeds:
+- 1
+- 2
+- 3
+- 4
+baseline: baseline
+variants:
+  baseline: []
+  relative:
+  - features.relative=true
+  augment:
+  - training.aug_level_jitter=0.5
+  - training.aug_hxr_dropout=0.3
+  - training.aug_noise_max=0.15
+  relative_augment:
+  - features.relative=true
+  - training.aug_hxr_dropout=0.3
+  - training.aug_noise_max=0.15

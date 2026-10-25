@@ -1,0 +1,30 @@
+# NOAA-protocol benchmark: a 24 h "M/X flare tomorrow?" model, trained on GOES years, then scored once
+# per UTC day on a later period / other satellite it never saw, like NOAA SWPC's daily probabilities.
+#   flarenet train -c configs/noaa_daily.yaml --run-name noaa_daily
+#   flarenet noaa-compare -c configs/noaa_daily.yaml --checkpoint runs/noaa_daily/checkpoint.pt \
+#       --source goes18_2024 --noaa-csv my_noaa_daily_probabilities.csv     # csv optional
+# Needs internet + `pip install -e ".[netcdf]"` (downloads ~1000 daily NCEI files once, then cached).
+# Real-data results are NOT part of this repo; run it and read runs/noaa_daily/noaa_compare.md.
+seed: 42
+run_name: noaa_daily
+data:
+  horizon_min: 1440        # forecast window = NOAA's 24 h
+  stride_min: 60
+  train_stride_min: 30
+  max_missing_frac: 0.25
+features:
+  relative: true           # inputs independent of detector gain / satellite
+training:
+  epochs: 40
+  ensemble_size: 3
+  aug_hxr_dropout: 0.2
+  aug_noise_max: 0.1
+sources:
+  - name: goes16_train
+    kind: nasa_goes_ncei
+    role: train
+    params: {satellite: 16, start: 2021-01-01, end: 2023-12-31}
+  - name: goes18_2024
+    kind: nasa_goes_ncei
+    role: eval              # different satellite, later period: never trained on
+    params: {satellite: 18, start: 2024-01-01, end: 2024-12-31}

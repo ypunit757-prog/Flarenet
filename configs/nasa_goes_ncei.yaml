@@ -1,0 +1,27 @@
+# Train and test on real NASA/NOAA GOES-R X-ray data (NOAA NCEI archive, downloaded on first use).
+#   flarenet run -c configs/nasa_goes_ncei.yaml
+# Needs internet + `pip install -e ".[netcdf]"`. Files are cached in data/downloads/goes_xrs.
+# Labels are GOES-calibrated classes (NOAA-style event detection on the 0.1-0.8 nm flux), so the
+# scores are real-Sun scores. Held-out test = whole 3-day blocks of the training series; the eval
+# source is a different satellite and a different period, which is the more honest number.
+seed: 42
+run_name: nasa_goes
+data:
+  max_missing_frac: 0.25     # drop windows with long telemetry gaps
+training:
+  epochs: 40
+sources:
+  - name: goes16_2024
+    kind: nasa_goes_ncei
+    role: train
+    params:
+      satellite: 16
+      start: 2024-03-01      # dates may be unquoted; the loader turns them into ISO strings
+      end: 2024-06-30
+  - name: goes18_autumn
+    kind: nasa_goes_ncei
+    role: eval
+    params:
+      satellite: 18
+      start: 2024-09-15
+      end: 2024-10-31

@@ -1,0 +1,21 @@
+# Train on NASA/NOAA GOES, test on India's Aditya-L1 (SoLEXS + HEL1OS): the domain-transfer test.
+#   flarenet run -c configs/cross_instrument.yaml
+# Aditya labels are a *relative proxy* (multiples of the quiet rate), not GOES classes, so the
+# report flags Aditya scores as not comparable with GOES scores. Edit the Aditya paths below.
+seed: 42
+run_name: goes_to_aditya
+data:
+  max_missing_frac: 0.25
+sources:
+  - name: goes16_2024
+    kind: nasa_goes_ncei
+    role: train
+    params: {satellite: 16, start: 2024-03-01, end: 2024-06-30}
+  - name: aditya_l1
+    kind: aditya_l1
+    role: eval
+    params:
+      solexs_path: /data/AL1_SOLEXS_20260623_SDD2_L1.lc
+      hel1os_dirs:
+        - /data/hel1os/HLS_20260623_000007_43181sec_lev1_V111
+        - /data/hel1os/HLS_20260623_121027_42566sec_lev1_V111
