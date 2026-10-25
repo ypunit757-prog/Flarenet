@@ -184,19 +184,19 @@ def score_log(
     df: pd.DataFrame, block: int = 14, n: int = 1000, min_days: int = 120, min_events: int = 30,
 ) -> dict:  # fmt: skip
     """Score every resolved day. Paired differences use only days where NOAA's forecast was also logged."""
-    r = df[df["y"].notna() & df["p_flarenet"].notna()].copy()
     # a forecast written after its own day had begun cannot count as a forecast of that day
-    start = pd.to_datetime(r["for_day"], utc=True)
-    logged = pd.to_datetime(r["logged_utc"], utc=True, errors="coerce")
+    start = pd.to_datetime(df["for_day"], utc=True)
+    logged = pd.to_datetime(df["logged_utc"], utc=True, errors="coerce")
     late = (logged.notna() & (logged >= start)).to_numpy()
     n_late = int(late.sum())
-    r = r[~late].copy()
+    counted = df[~late]
+    r = counted[counted["y"].notna() & counted["p_flarenet"].notna()].copy()
     r["for_day"] = pd.to_datetime(r["for_day"], utc=True)
     r = r.sort_values("for_day")
     out: dict = {
         "logged_days": int(len(df)),
         "resolved_days": int(len(r)),
-        "unresolved_days": int(len(df) - len(r) - n_late),
+        "unresolved_days": int(len(counted) - len(r)),
         "late_logged_days_excluded": n_late,
         "models": sorted(set(df["model_id"].dropna().astype(str))),
         "first_day": None if r.empty else str(r["for_day"].iloc[0].date()),
@@ -209,7 +209,7 @@ def score_log(
             days.nunique()
         )  # days between first and last with no forecast logged
     if r.empty:
-        out["verdict"] = {"code": "no_data", "text": "No resolved days yet."}
+        out["verdict"] = {"code": "no_data", "text": "No scored days yet."}
         return out
     y = r["y"].to_numpy(int)
     pf = r["p_flarenet"].to_numpy(float)

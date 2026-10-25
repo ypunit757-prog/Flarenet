@@ -193,7 +193,7 @@ def test_scorer_flags_a_changed_model_and_gaps():
 
 def test_empty_log_scores_without_error(tmp_path):
     res = fw.score_log(fw.read_log(tmp_path / "none.csv"))
-    assert res["verdict"]["code"] == "no_data" and "No resolved" in fw.format_forward(res)
+    assert res["verdict"]["code"] == "no_data" and "No scored days" in fw.format_forward(res)
 
 
 def test_freeze_then_predict_and_log_end_to_end(tmp_path, monkeypatch, capsys):
@@ -293,3 +293,18 @@ def test_live_vs_archive_check_counts_disagreements(tmp_path, monkeypatch):
     fw.append_forecast(p, _row("2026-10-26", noaa=0.50))  # archive says 0.30: a disagreement
     c = fw.compare_live_vs_archive(p, tmp_path)
     assert c["compared"] == 2 and c["mismatched"] == 1 and c["max_abs_diff"] == pytest.approx(0.20)
+
+
+def test_late_row_is_counted_even_before_its_outcome_is_known():
+    df = pd.DataFrame(
+        [
+            _row("2026-10-25", logged_utc="2026-10-25T00:34:36Z"),
+            _row("2026-10-26", logged_utc="2026-10-25T22:21:00Z"),
+        ]
+    )
+    res = fw.score_log(df.reindex(columns=fw.LOG_COLUMNS))
+    assert (
+        res["late_logged_days_excluded"] == 1
+        and res["unresolved_days"] == 1
+        and res["resolved_days"] == 0
+    )
