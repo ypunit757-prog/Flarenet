@@ -135,11 +135,13 @@ def test_live_noaa_parse_and_day_alignment(monkeypatch):
     monkeypatch.setattr(http, "http_get", fake)
     noaa = live.fetch_noaa_live()
     assert noaa["first_day"] == date(2026, 10, 25) and noaa["source"].endswith("predictions.txt")
-    assert live.noaa_prob_for_day(noaa, date(2026, 10, 26), "M") == pytest.approx(0.45)
-    assert live.noaa_prob_for_day(noaa, date(2026, 10, 26), "X") == pytest.approx(0.06)
-    assert np.isnan(
-        live.noaa_prob_for_day(noaa, date(2026, 10, 24), "M")
-    )  # not covered: never paired with a stale day
+    assert live.noaa_prob_for_day(noaa, date(2026, 10, 25), "M") == pytest.approx(
+        0.40
+    )  # its day-ahead number
+    assert live.noaa_prob_for_day(noaa, date(2026, 10, 25), "X") == pytest.approx(0.05)
+    # a file issued the day before still covers the 26th, but only as its second day: never paired
+    assert np.isnan(live.noaa_prob_for_day(noaa, date(2026, 10, 26), "M"))
+    assert np.isnan(live.noaa_prob_for_day(noaa, date(2026, 10, 24), "M"))
     assert np.isnan(live.noaa_prob_for_day(None, date(2026, 10, 26), "M"))
     assert any("OK" in line for line in live.check_noaa_live())
 

@@ -9,7 +9,12 @@ name: Daily forward-test log
 # that file while the test runs: a new model needs a new log.
 on:
   schedule:
+    # GitHub can start scheduled jobs hours late. A forecast must be written before 24:00 UTC to count, so the job is
+    # triggered four times; the log is append-only, so the first successful run wins and later ones change nothing.
     - cron: "20 22 * * *"
+    - cron: "50 22 * * *"
+    - cron: "20 23 * * *"
+    - cron: "50 23 * * *"
   workflow_dispatch:
 
 permissions:
@@ -27,7 +32,13 @@ jobs:
       - name: Check for the frozen model
         id: model
         run: |
-          if [ -f models/daily_model_live.pkl ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "No models/daily_model_live.pkl committed, skipping."; fi
+          if [ -f models/daily_model_live.pkl ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::models/daily_model_live.pkl is not in the repository, so nothing was logged. Commit it (git add -f models/daily_model_live.pkl) and push."
+            ls -la models || true
+            exit 1
+          fi
       - uses: actions/setup-python@v5
         if: steps.model.outputs.ok == 'true'
         with:

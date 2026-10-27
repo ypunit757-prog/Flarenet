@@ -120,12 +120,12 @@ def check_noaa_live(timeout: float = 20.0) -> list[str]:
 
 
 def noaa_prob_for_day(noaa: dict | None, for_day: date, target: str = "M") -> float:
-    """NOAA's probability for exactly ``for_day`` (NaN if its forecast does not cover that day)."""
-    if not noaa:
+    """NOAA's day-ahead probability for ``for_day``: its forecast must start on that day (issued the evening
+    before, like the archive's first number). An older file that merely still covers ``for_day`` as its second
+    or third day is NaN, never paired: that would score NOAA on a staler forecast than FlareNet's."""
+    if not noaa or noaa["first_day"] != for_day:
         return float("nan")
-    k = (for_day - noaa["first_day"]).days
-    vals = noaa["m" if target.upper() == "M" else "x"]
-    return float(vals[k]) if 0 <= k < len(vals) else float("nan")
+    return float(noaa["m" if target.upper() == "M" else "x"][0])
 
 
 def model_id(path: str | Path) -> str:

@@ -45,9 +45,9 @@ excluded from scoring, so a run at 00:04 UTC is only a test: delete `forward_log
 Best: let GitHub do it, so a sleeping laptop cannot leave gaps.
 
 1. Commit `models/daily_model_live.pkl` and push the repository to GitHub.
-2. The workflow `.github/workflows/daily-forward-log.yml` runs at 22:20 UTC (03:50 IST) and publishes
+2. The workflow `.github/workflows/daily-forward-log.yml` is triggered at 22:20, 22:50, 23:20 and 23:50 UTC (03:50, 04:20, 04:50 and 05:20 IST). GitHub sometimes starts scheduled jobs hours late, and a forecast written after 24:00 UTC does not count, so there are four chances; the first one that runs writes the day, the rest change nothing. It publishes
    `forward_log.csv` and `forward_report.md` to the `data` branch. Start it once with "Run workflow" in the Actions tab.
-   This workflow has not been run on GitHub yet; check the first run in the Actions tab.
+   Check each run in the Actions tab; a red run means nothing was logged that time.
 
 Or on your own machine, a daily cron job (the machine must be awake):
 
