@@ -2,7 +2,7 @@
 
 **No scored days yet.**
 
-- Forecast days logged: 2; resolved (outcome known): 0; unresolved: 0; logged after their day began (excluded): 2; calendar days with no forecast logged: 0.
+- Forecast days logged: 3; resolved (outcome known): 0; unresolved: 0; logged after their day began (excluded): 3; calendar days with no forecast logged: 0.
 - Model fingerprints in the log: 2e0f2e52aa.
 
 Fewer than 20 resolved days have both a FlareNet and a NOAA forecast logged, so there is no comparison yet.
