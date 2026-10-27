@@ -26,6 +26,11 @@ LOG_COLUMNS = [
     "p_noaa", "p_noaa_recal", "threshold_noaa_recal", "noaa_source", "noaa_issued", "regions_used",
     "warnings", "logged_utc", "y", "y_cov", "resolved_utc",
 ]  # fmt: skip
+# A forecast row may be written up to this long after its UTC day began and still count. The model's inputs end at
+# 22:00 UTC the evening before whatever time the job runs (enforced in code, tested), so a delayed scheduler does
+# not change the forecast; the limit only stops a row written when much of the day is already known from counting.
+# Fixed before any logged day was scored; do not change it after seeing results.
+GRACE_HOURS = 6.0
 TEXT_COLUMNS = ["for_day", "issued_utc", "model_id", "trained_until", "target", "noaa_source", "noaa_issued",
                 "warnings", "logged_utc", "resolved_utc"]  # fmt: skip
 NAN = float("nan")
@@ -182,13 +187,15 @@ def compare_live_vs_archive(
 
 def score_log(
     df: pd.DataFrame, block: int = 14, n: int = 1000, min_days: int = 120, min_events: int = 30,
+    grace_hours: float = GRACE_HOURS,
 ) -> dict:  # fmt: skip
     """Score every resolved day. Paired differences use only days where NOAA's forecast was also logged."""
-    # a forecast written after its own day had begun cannot count as a forecast of that day
     start = pd.to_datetime(df["for_day"], utc=True)
     logged = pd.to_datetime(df["logged_utc"], utc=True, errors="coerce")
-    late = (logged.notna() & (logged >= start)).to_numpy()
+    limit = start + pd.Timedelta(hours=grace_hours)
+    late = (logged.notna() & (logged >= limit)).to_numpy()  # written too long after the day began
     n_late = int(late.sum())
+    n_grace = int((logged.notna() & (logged >= start) & (logged < limit)).sum())
     counted = df[~late]
     r = counted[counted["y"].notna() & counted["p_flarenet"].notna()].copy()
     r["for_day"] = pd.to_datetime(r["for_day"], utc=True)
@@ -198,6 +205,8 @@ def score_log(
         "resolved_days": int(len(r)),
         "unresolved_days": int(len(counted) - len(r)),
         "late_logged_days_excluded": n_late,
+        "late_within_grace_days_counted": n_grace,
+        "grace_hours": grace_hours,
         "models": sorted(set(df["model_id"].dropna().astype(str))),
         "first_day": None if r.empty else str(r["for_day"].iloc[0].date()),
         "last_day": None if r.empty else str(r["for_day"].iloc[-1].date()),
@@ -285,7 +294,8 @@ def format_forward(res: dict) -> str:
     ]
     L += [f"**{res['verdict']['text']}**", ""]
     L += [f"- Forecast days logged: {res['logged_days']}; resolved (outcome known): {res['resolved_days']}; "
-          f"unresolved: {res['unresolved_days']}; logged after their day began (excluded): "
+          f"unresolved: {res['unresolved_days']}; written up to {res['grace_hours']:g} h after their day began "
+          f"(counted): {res['late_within_grace_days_counted']}; written later than that (excluded): "
           f"{res['late_logged_days_excluded']}; calendar days with no forecast logged: {res.get('calendar_gaps', 0)}.",
           f"- Model fingerprints in the log: {', '.join(res['models']) or 'none'}."]  # fmt: skip
     if res.get("first_day"):

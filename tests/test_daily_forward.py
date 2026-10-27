@@ -260,47 +260,29 @@ def test_freeze_then_predict_and_log_end_to_end(tmp_path, monkeypatch, capsys):
     assert df.loc[0, "noaa_source"] == "test"
 
 
-def test_forecast_logged_after_its_day_began_is_not_scored():
+def test_forecast_written_long_after_its_day_began_is_not_scored():
     df = _log(200, 0.5)
     df["logged_utc"] = [
         f"{d}T22:30:00Z" for d in pd.to_datetime(df["for_day"]).dt.date - pd.Timedelta(days=1)
     ]
     ok = fw.score_log(df, n=50)
-    assert ok["late_logged_days_excluded"] == 0 and ok["resolved_days"] == 200
-    df.loc[:49, "logged_utc"] = [
-        f"{d}T00:10:00Z" for d in df.loc[:49, "for_day"]
-    ]  # written 10 minutes into the day
+    assert ok["late_logged_days_excluded"] == 0 and ok["late_within_grace_days_counted"] == 0
+    assert ok["resolved_days"] == 200
+    # a scheduler delay of 10 minutes or 5 hours past midnight still counts (the inputs end at 22:00 the evening before)...
+    df.loc[:24, "logged_utc"] = [f"{d}T00:10:00Z" for d in df.loc[:24, "for_day"]]
+    df.loc[25:49, "logged_utc"] = [f"{d}T05:00:00Z" for d in df.loc[25:49, "for_day"]]
+    grace = fw.score_log(df, n=50)
+    assert grace["late_within_grace_days_counted"] == 50 and grace["resolved_days"] == 200
+    # ...but a row written 9 hours into its day is excluded
+    df.loc[:49, "logged_utc"] = [f"{d}T09:00:00Z" for d in df.loc[:49, "for_day"]]
     bad = fw.score_log(df, n=50)
     assert bad["late_logged_days_excluded"] == 50 and bad["resolved_days"] == 150
-
-
-def test_live_vs_archive_check_counts_disagreements(tmp_path, monkeypatch):
-    from flarenet.sources.base import SourceUnavailable
-
-    monkeypatch.setattr(
-        nt, "http_get", lambda url, **kw: (_ for _ in ()).throw(SourceUnavailable("HTTP 404"))
-    )
-    for day, m in (("20261024", "40"), ("20261025", "30")):
-        q = tmp_path / "rsga" / "2026"
-        q.mkdir(parents=True, exist_ok=True)
-        (q / f"{day}.txt").write_text(
-            f":Issued: 2026 Oct {day[-2:]} 2200 UTC\nIII.  Event probabilities 25 Oct-27 Oct\nClass M    {m}/{m}/{m}\nClass X    05/05/05\n"
-        )
-    p = tmp_path / "log.csv"
-    fw.append_forecast(p, _row("2026-10-25", noaa=0.40))  # live number equals the archive's
-    q2 = tmp_path / "rsga" / "2026"
-    (q2 / "20261025.txt").write_text(
-        ":Issued: 2026 Oct 25 2200 UTC\nIII.  Event probabilities 26 Oct-28 Oct\nClass M    30/30/30\nClass X    05/05/05\n"
-    )
-    fw.append_forecast(p, _row("2026-10-26", noaa=0.50))  # archive says 0.30: a disagreement
-    c = fw.compare_live_vs_archive(p, tmp_path)
-    assert c["compared"] == 2 and c["mismatched"] == 1 and c["max_abs_diff"] == pytest.approx(0.20)
 
 
 def test_late_row_is_counted_even_before_its_outcome_is_known():
     df = pd.DataFrame(
         [
-            _row("2026-10-25", logged_utc="2026-10-25T00:34:36Z"),
+            _row("2026-10-25", logged_utc="2026-10-25T09:34:36Z"),
             _row("2026-10-26", logged_utc="2026-10-25T22:21:00Z"),
         ]
     )
@@ -310,3 +292,24 @@ def test_late_row_is_counted_even_before_its_outcome_is_known():
         and res["unresolved_days"] == 1
         and res["resolved_days"] == 0
     )
+
+
+def test_live_vs_archive_check_counts_disagreements(tmp_path, monkeypatch):
+    from flarenet.sources.base import SourceUnavailable
+
+    monkeypatch.setattr(
+        nt, "http_get", lambda url, **kw: (_ for _ in ()).throw(SourceUnavailable("HTTP 404"))
+    )
+    q = tmp_path / "rsga" / "2026"
+    q.mkdir(parents=True, exist_ok=True)
+    (q / "20261024.txt").write_text(
+        ":Issued: 2026 Oct 24 2200 UTC\nIII.  Event probabilities 25 Oct-27 Oct\nClass M    40/40/40\nClass X    05/05/05\n"
+    )
+    (q / "20261025.txt").write_text(
+        ":Issued: 2026 Oct 25 2200 UTC\nIII.  Event probabilities 26 Oct-28 Oct\nClass M    30/30/30\nClass X    05/05/05\n"
+    )
+    p = tmp_path / "log.csv"
+    fw.append_forecast(p, _row("2026-10-25", noaa=0.40))  # live number equals the archive's
+    fw.append_forecast(p, _row("2026-10-26", noaa=0.50))  # archive says 0.30: a disagreement
+    c = fw.compare_live_vs_archive(p, tmp_path)
+    assert c["compared"] == 2 and c["mismatched"] == 1 and c["max_abs_diff"] == pytest.approx(0.20)

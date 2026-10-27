@@ -9,8 +9,8 @@ name: Daily forward-test log
 # that file while the test runs: a new model needs a new log.
 on:
   schedule:
-    # GitHub can start scheduled jobs hours late. A forecast must be written before 24:00 UTC to count, so the job is
-    # triggered four times; the log is append-only, so the first successful run wins and later ones change nothing.
+    # GitHub can start scheduled jobs hours late. A forecast may be written up to 6 h after midnight UTC and still count,
+    # so the job is triggered four times; the log is append-only, so the first successful run wins and later ones change nothing.
     - cron: "20 22 * * *"
     - cron: "50 22 * * *"
     - cron: "20 23 * * *"
