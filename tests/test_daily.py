@@ -325,6 +325,61 @@ def test_predict_tomorrow_runs_and_warns(synth_bundle, tmp_path):
     assert any("sunspot" in w for w in got2["warnings"])
 
 
+def _live_pkg(b, tmp_path):
+    from flarenet.daily.live import load_daily_model
+
+    tab = build_day_table(b, None, 22)
+    cols = [c for c in feature_columns(tab, ("f_", "h_")) if not c.startswith("rot_")]
+    m = DailyModel(DailyParams(oof_blocks=3)).fit(tab[cols], tab["y_m"].to_numpy(), tab.index)
+    pkg = {"model": m, "columns": cols, "target": "M", "issue_hour_utc": 22,
+           "trained_days": len(tab), "trained_until": "x"}  # fmt: skip
+    import pickle
+
+    p = tmp_path / "m.pkl"
+    p.write_bytes(pickle.dumps(pkg))
+    return load_daily_model(p)
+
+
+def test_a_feed_running_past_the_issue_time_is_no_warning_and_cannot_change_the_forecast(
+    synth_bundle, tmp_path
+):
+    """The live job runs after midnight UTC, so the feed always ends hours after the 22:00 issue time. Features
+    are cut at the issue time, so that is harmless and must not be reported as a problem."""
+    from flarenet.daily.live import predict_tomorrow
+
+    cfg, b = synth_bundle
+    pkg = _live_pkg(b, tmp_path)
+    got = predict_tomorrow(pkg, b, srs_text=None)
+    assert not any("issue time" in w or "approximate" in w for w in got["warnings"])
+    issue = pd.Timestamp(got["issued_utc"]).timestamp()
+    cut = int((issue - b.t0_unix) / 60) + 1
+    b2 = type(b)(b.name, b.kind, b.df.copy(), b.t0_unix, dict(b.meta), b.flare_db.copy())
+    b2.df.loc[b2.df.index[cut:], "sxr_raw"] = 9e-4  # a huge flare after the issue time
+    b2.df.loc[b2.df.index[cut:], "sxr"] = 9e-4
+    got2 = predict_tomorrow(pkg, b2, srs_text=None)
+    assert got2["probability"] == got["probability"] and got2["issued_utc"] == got["issued_utc"]
+
+
+def test_gappy_data_and_a_stale_feed_are_reported(synth_bundle, tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    from flarenet.daily.live import feed_age_hours, predict_tomorrow
+
+    cfg, b = synth_bundle
+    pkg = _live_pkg(b, tmp_path)
+    gappy = type(b)(b.name, b.kind, b.df.copy(), b.t0_unix, dict(b.meta), b.flare_db.copy())
+    n_last_2d = 2 * 1440
+    gappy.df.loc[gappy.df.index[-n_last_2d:], "sxr_raw"] = (
+        np.nan
+    )  # the whole last 24 h before the issue time
+    gappy.df.loc[gappy.df.index[-n_last_2d:], "sxr"] = np.nan
+    got = predict_tomorrow(pkg, gappy, srs_text=None)
+    assert any("of the last 24 h of X-ray data" in w for w in got["warnings"])
+    t_last = b.t0_unix + (len(b.df) - 1) * 60.0
+    now = datetime.fromtimestamp(t_last, tz=timezone.utc) + timedelta(hours=5)
+    assert abs(feed_age_hours(b, now) - 5.0) < 1e-6
+
+
 # the live "3-day Space Weather Predictions" file, as NOAA served it on 2026-10-24 (flare section kept)
 DAYPRE_2026_10_24 = """:Product: 3-day Space Weather Predictions daypre.txt
 :Issued: 2026 Oct 24 2200 UTC

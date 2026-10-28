@@ -24,9 +24,14 @@ def load_daily_model(path: str | Path) -> dict:
         return pickle.load(f)  # a file this project wrote; only load files you trust
 
 
+def feed_age_hours(bundle: LightcurveBundle, now: datetime | None = None) -> float:
+    """How many hours old the newest flux sample is (a stale live feed gives a stale forecast)."""
+    t_last = bundle.t0_unix + (len(bundle.df) - 1) * 60.0
+    return ((now or datetime.now(timezone.utc)).timestamp() - t_last) / 3600.0
+
+
 def predict_tomorrow(
     pkg: dict, bundle: LightcurveBundle, srs_text: str | None = None, now_utc: datetime | None = None,
-    issue_tolerance_h: float = 3.0,
 ) -> dict:  # fmt: skip
     """Probability that the target flare class starts during the next UTC day, from ``bundle`` (live flux)."""
     t0 = bundle.t0_unix
@@ -38,10 +43,10 @@ def predict_tomorrow(
     t_issue = day0.timestamp() + issue_h * 3600.0
     if t_issue > t_last + 60.0:  # before today's issue time: use yesterday's
         t_issue -= 86400.0
+    # The feed normally runs some hours past the issue time (this is run after midnight UTC). That is fine: every
+    # feature is cut at the issue time, so data after it cannot change the forecast (tested). A stale feed is a
+    # different problem and is checked against the real clock by the caller (feed_age_hours).
     warn = []
-    if abs(t_last - t_issue) > issue_tolerance_h * 3600.0:
-        warn.append(f"the newest flux sample is {(t_last - t_issue) / 3600:+.1f} h from the {issue_h:02d}:00 UTC issue time; "
-                    "the model was trained for that time, so treat this forecast as approximate")  # fmt: skip
     t_day = np.floor(t_issue / 86400.0) * 86400.0 + 86400.0
     flux = (bundle.df["sxr_raw"] if "sxr_raw" in bundle.df.columns else bundle.df["sxr"]).to_numpy(
         float
@@ -60,6 +65,12 @@ def predict_tomorrow(
     feats = day_features(
         t_issue, t_day, lf, t0, events_table(bundle), regions, srs_day, rot_ok=False
     )
+    cov = feats.get("f_cov_24h", np.nan)
+    if np.isfinite(cov) and cov < 0.8:
+        warn.append(
+            f"only {cov:.0%} of the last 24 h of X-ray data before the issue time is present; "
+            "the forecast is less reliable"
+        )
     cols = pkg["columns"]
     if any(c.startswith("r_") for c in cols) and regions is None:
         warn.append(

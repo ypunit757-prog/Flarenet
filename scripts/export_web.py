@@ -64,10 +64,11 @@ def build_payload(
     nowc = fc["nowcast_class"].map({c: i for i, c in enumerate(CLASS_NAMES)}).to_numpy()
 
     cases = cases.copy()
-    cases["peak_unix"] = (
-        pd.to_datetime(cases["peak_utc"], utc=True) - pd.Timestamp("1970-01-01", tz="UTC")
-    ).dt.total_seconds()
-    cases = cases[cases["peak_unix"] >= lo]
+    if len(cases):  # a quiet week has no flare of the chosen class: the list is simply empty
+        cases["peak_unix"] = (
+            pd.to_datetime(cases["peak_utc"], utc=True) - pd.Timestamp("1970-01-01", tz="UTC")
+        ).dt.total_seconds()
+        cases = cases[cases["peak_unix"] >= lo]
     flares = [
         {
             "peak": _iso(r.peak_unix),

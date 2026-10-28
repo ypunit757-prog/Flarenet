@@ -26,6 +26,7 @@ from flarenet.core.config import load_config
 from flarenet.daily.forward import append_forecast, resolve_outcomes
 from flarenet.daily.live import (
     check_noaa_live,
+    feed_age_hours,
     fetch_live_srs,
     fetch_noaa_live,
     load_daily_model,
@@ -67,6 +68,12 @@ def main(argv=None) -> int:
 
     pkg = load_daily_model(a.model)
     out = predict_tomorrow(pkg, bundle, fetch_live_srs())
+    age_h = feed_age_hours(bundle)
+    if age_h > 3.0:
+        out["warnings"].append(
+            f"the live X-ray feed is {age_h:.1f} h old (its newest sample is that long ago); "
+            "the forecast may be built from stale data"
+        )
     for_day = date.fromisoformat(out["for_day"])
     noaa = fetch_noaa_live()
     p_noaa = noaa_prob_for_day(noaa, for_day, pkg["target"])

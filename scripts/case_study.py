@@ -38,6 +38,18 @@ def goes_label(flux: float) -> str:
     return f"A{flux / 1e-8:.1f}"
 
 
+CASE_COLUMNS = [
+    "peak_utc",
+    "class",
+    "forecast",
+    "lead_min",
+    "max_prob_before",
+    "alert_at_last_issue",
+    "nowcast_peak_class",
+    "nowcast_ok",
+]
+
+
 def context_stats(
     t: np.ndarray,
     alert: np.ndarray,
@@ -125,7 +137,9 @@ def case_table(
                 "nowcast_ok": bool(seen >= ev.class_idx),
             }
         )
-    return pd.DataFrame(rows)
+    # explicit columns: a quiet week with no flare of that class must give an empty table, not a table
+    # without columns (the live web refresh crashed on exactly that)
+    return pd.DataFrame(rows, columns=CASE_COLUMNS)
 
 
 def main(argv=None) -> int:
