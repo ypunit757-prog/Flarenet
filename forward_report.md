@@ -1,10 +1,10 @@
 # Forward test: FlareNet vs NOAA on days that had not happened when the forecast was made
 
-**Too early to read: need at least 120 resolved days with at least 30 flare days; have 5 and 0.**
+**Too early to read: need at least 120 resolved days with at least 30 flare days; have 6 and 0.**
 
-- Forecast days logged: 6; resolved (outcome known): 5; unresolved: 1; written up to 6 h after their day began (counted): 6; written later than that (excluded): 0; calendar days with no forecast logged: 0.
+- Forecast days logged: 7; resolved (outcome known): 6; unresolved: 1; written up to 6 h after their day began (counted): 7; written later than that (excluded): 0; calendar days with no forecast logged: 0.
 - Model fingerprints in the log: 2e0f2e52aa.
-- Period: 2026-10-25 to 2026-10-29; flare days: 0.
+- Period: 2026-10-25 to 2026-10-30; flare days: 0.
 
 Fewer than 20 resolved days have both a FlareNet and a NOAA forecast logged, so there is no comparison yet.
 
