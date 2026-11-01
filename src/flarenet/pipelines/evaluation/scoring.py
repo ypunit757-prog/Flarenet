@@ -10,6 +10,7 @@ import torch
 from sklearn.metrics import f1_score
 
 from flarenet.core.utils import get_logger
+from flarenet.pipelines.evaluation.calibration import apply_calibration
 from flarenet.pipelines.evaluation.lead_time import compute_lead_times, summarise_lead_times
 from flarenet.pipelines.evaluation.metrics import (
     best_threshold,
@@ -32,10 +33,12 @@ def infer(
     device,
     batch_size: int = 512,
     now_bias=None,
+    calibration=None,
 ):
     """Run the model over raw (unnormalised) windows.
 
-    ``now_bias`` (optional, one value per class) is added to the nowcast logits first.
+    ``now_bias`` (optional, one value per class) is added to the nowcast logits first. ``calibration`` (the
+    checkpoint's Platt parameters, or None) maps the raw forecast probabilities onto observed frequencies.
     Returns (nowcast class ids, nowcast class probabilities, forecast probabilities).
     """
     model.eval()
@@ -54,7 +57,11 @@ def infer(
         classes.append(now_logits.argmax(1).cpu().numpy())
         class_probs.append(torch.softmax(now_logits, -1).cpu().numpy())
         probs.append(torch.sigmoid(fc_logits).cpu().numpy())
-    return np.concatenate(classes), np.concatenate(class_probs), np.concatenate(probs)
+    return (
+        np.concatenate(classes),
+        np.concatenate(class_probs),
+        apply_calibration(calibration, np.concatenate(probs)),
+    )
 
 
 @dataclass
@@ -77,6 +84,9 @@ class EvalResult:
     roc: tuple = field(default_factory=tuple)
     ci: dict = field(default_factory=dict)  # 95% block-bootstrap intervals
     calibration: dict = field(default_factory=dict)
+    alert_levels: dict = field(
+        default_factory=dict
+    )  # the checkpoint's alert levels, scored on this dataset
     baselines: dict = field(default_factory=dict)  # reference forecasters on the same windows
     kind: str = "test"  # test (held-out split of a train source) | external (eval source)
 
@@ -94,6 +104,7 @@ class EvalResult:
             "lead_time": summarise_lead_times(self.lead),
             "confidence_95": self.ci,
             "calibration": {k: v for k, v in self.calibration.items() if k in ("brier", "ece")},
+            "alert_levels": self.alert_levels,
             "baselines": self.baselines,
             "kind": self.kind,
             "n_windows": int(len(self.forecast_true)),
@@ -117,9 +128,11 @@ def evaluate_dataset(
     device,
     horizon_min: int,
     now_bias=None,
+    calibration=None,
+    alert_levels=None,
 ) -> EvalResult:
-    """Score a labelled set of windows at the saved alert threshold."""
-    pred_cls, _, prob = infer(model, X, mu, sg, device, now_bias=now_bias)
+    """Score a labelled set of windows at the saved alert threshold (and at the checkpoint's other alert levels)."""
+    pred_cls, _, prob = infer(model, X, mu, sg, device, now_bias=now_bias, calibration=calibration)
     acc = float((pred_cls == y_now).mean())
     macro_f1 = float(f1_score(y_now, pred_cls, average="macro"))
     auc = safe_auc(y_fc, prob)
@@ -140,7 +153,15 @@ def evaluate_dataset(
         scores["FAR"],
         oracle,
     )
-    return EvalResult(
+    levels = {}
+    for lname, lv in (alert_levels or {}).items():
+        if lv:
+            sc = score_at_threshold(y_fc, prob, lv["threshold"])
+            levels[lname] = {
+                "threshold": float(lv["threshold"]),
+                **{k: float(sc[k]) for k in ("POD", "FAR", "TSS")},
+            }
+    res = EvalResult(
         name,
         np.asarray(y_now),
         pred_cls,
@@ -156,3 +177,5 @@ def evaluate_dataset(
         lead,
         safe_roc(y_fc, prob),
     )
+    res.alert_levels = levels
+    return res

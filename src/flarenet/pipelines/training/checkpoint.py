@@ -24,11 +24,16 @@ class LoadedModel:
     trained_on: list[str]
     # Per-class logit offsets added to the nowcast logits (tuned on validation), or None.
     now_bias: np.ndarray | None = None
+    # Platt calibration of the forecast probability ({"kind", "a", "b"}), or None for the raw output.
+    calibration: dict | None = None
+    # Alert levels chosen on validation: {"balanced"|"sensitive"|"strict": {"threshold", "POD", "FAR", "TSS"} | None}.
+    alert_levels: dict | None = None
 
 
 def save_checkpoint(
-    path, model, mu, sg, threshold, cfg: Config, channels, trained_on, now_bias=None
-) -> None:
+    path, model, mu, sg, threshold, cfg: Config, channels, trained_on, now_bias=None,
+    calibration=None, alert_levels=None,
+) -> None:  # fmt: skip
     payload = {
         "mu": torch.from_numpy(np.asarray(mu)),
         "sg": torch.from_numpy(np.asarray(sg)),
@@ -44,6 +49,10 @@ def save_checkpoint(
         payload["state_dict"] = model.state_dict()
     if now_bias is not None:
         payload["now_bias"] = torch.as_tensor(np.asarray(now_bias, dtype=np.float32))
+    if calibration:
+        payload["calibration"] = dict(calibration)
+    if alert_levels:
+        payload["alert_levels"] = alert_levels
     torch.save(payload, path)
 
 
@@ -71,4 +80,5 @@ def load_checkpoint(path: str | Path, device) -> LoadedModel:
         model, ckpt["mu"].numpy(), ckpt["sg"].numpy(), float(ckpt["threshold"]),
         ckpt["config"], list(ckpt["channels"]), list(ckpt.get("trained_on", [])),
         None if bias is None else bias.numpy(),
+        ckpt.get("calibration"), ckpt.get("alert_levels"),
     )  # fmt: skip

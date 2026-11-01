@@ -52,9 +52,16 @@ def build_caveats(ctx: PipelineContext) -> list[str]:
                 f"[{name}] no hard-channel data: the hard channel was replaced by the soft one, so hardness/derivative-of-hard channels carry no extra information."
             )
         if spec.role == "train" and res.kind == "test":
-            out.append(
-                f"[{name}] scored on held-out 3-day blocks of the same series used for training; this is not a test on a different period or instrument."
-            )
+            if ctx.cfg.data.split == "chrono":
+                out.append(
+                    f"[{name}] scored on the latest {100 - round(100 * (ctx.cfg.data.train_frac + ctx.cfg.data.val_frac))}% "
+                    "of the same series (after the training and validation periods); this is a later period of the same "
+                    "instrument, not a different instrument, and it is not comparable with a block-split held-out score."
+                )
+            else:
+                out.append(
+                    f"[{name}] scored on held-out 3-day blocks of the same series used for training; this is not a test on a different period or instrument."
+                )
     loaded = ctx.state.get("loaded")
     if loaded is None or "recent_flare_rate_6h" in loaded.channels:
         out.append(
@@ -102,6 +109,8 @@ class MetricsStage(Stage):
                 "horizon_min": cfg.data.horizon_min,
             },  # fmt: skip
             "alert_threshold": lm.threshold,
+            "calibration": lm.calibration,
+            "alert_levels_validation": lm.alert_levels,
             "sources": sources,
             "results": {
                 n: r.summary() | {"dataset": r.name} for n, r in ctx.state["eval_results"].items()
@@ -159,6 +168,24 @@ class MarkdownStage(Stage):
                 "",
                 "The flux rule needs GOES-calibrated flux: for sources with proxy labels (e.g. Aditya-L1 "
                 "relative classes) its nowcast columns are not meaningful.",
+            ]  # fmt: skip
+        lv_rows = []
+        for res in r["results"].values():
+            for lname, lv in (res.get("alert_levels") or {}).items():
+                lv_rows.append(
+                    f"| {res['dataset']} | {lname} | {_fmt(lv['threshold'])} | {_fmt(lv['POD'])} | "
+                    f"{_fmt(lv['FAR'])} | {_fmt(lv['TSS'])} |"
+                )
+        if lv_rows:
+            val_lv = r.get("alert_levels_validation") or {}
+            wanted = ", ".join(f"{k} {v['threshold']:.3f}" for k, v in val_lv.items() if v)
+            lines += [
+                "", "## Alert levels (thresholds chosen on the validation windows, scored on each dataset)", "",
+                f"Thresholds: {wanted}. Probabilities are "
+                f"{'calibrated (Platt, fitted on validation)' if r.get('calibration') else 'the raw model output'}. "
+                "Moving to a stricter level trades warned flares for fewer false alarms.",
+                "", "| dataset | level | threshold | POD | FAR | TSS |", "|---|---|---|---|---|---|",
+                *lv_rows,
             ]  # fmt: skip
         lines += [
             "",

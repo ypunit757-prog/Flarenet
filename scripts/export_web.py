@@ -92,6 +92,12 @@ def build_payload(
         "model": {
             "name": lm.config.get("model", {}).get("name", "flarenet"),
             "threshold": round(float(lm.threshold), 3),
+            "calibrated": bool(getattr(lm, "calibration", None)),
+            "alert_levels": {
+                k: round(float(v["threshold"]), 3)
+                for k, v in (getattr(lm, "alert_levels", None) or {}).items()
+                if v
+            },
             "window_min": int(lm.config["data"]["window_min"]),
             "horizon_min": int(lm.config["data"]["horizon_min"]),
         },

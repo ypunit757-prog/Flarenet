@@ -75,3 +75,19 @@ def test_payload_lists_a_flare_inside_the_window():
     payload = build_payload(b, lm, fc, fc, 1.0, "M", cases)
     assert [f["class"] for f in payload["flares"]] == ["M1.7"]
     assert payload["flares"][0]["forecast"] == "MISSED" and payload["flares"][0]["lead_min"] is None
+
+
+def test_payload_carries_calibration_and_alert_levels_when_the_checkpoint_has_them():
+    b = _bundle(build_flare_db(make_lightcurve(3000), label="quiet"))
+    fc = _forecasts()
+    cases = case_table(b, fc, _forecasts(stride=5), 0.5, 360, "M")
+    levels = {"balanced": {"threshold": 0.31}, "sensitive": {"threshold": 0.12}, "strict": None}
+    lm = SimpleNamespace(
+        config={"model": {"name": "flarenet"}, "data": {"window_min": 90, "horizon_min": 360}},
+        threshold=0.31, calibration={"kind": "platt", "a": 1.0, "b": -1.0}, alert_levels=levels,
+    )  # fmt: skip
+    m = build_payload(b, lm, fc, fc, 1.0, "M", cases)["model"]
+    assert m["calibrated"] is True and m["alert_levels"] == {"balanced": 0.31, "sensitive": 0.12}
+    old = SimpleNamespace(config=lm.config, threshold=0.48)  # a checkpoint from before this feature
+    m2 = build_payload(b, old, fc, fc, 1.0, "M", cases)["model"]
+    assert m2["calibrated"] is False and m2["alert_levels"] == {}

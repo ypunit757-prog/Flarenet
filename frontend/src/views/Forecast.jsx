@@ -139,7 +139,13 @@ export default function Forecast({ store }) {
       <details className="card">
         <summary>How to read this page</summary>
         <div className="prose">
-          <p><b>Risk</b> is a model score for an M or X flare starting in the next {Math.round(D.model.horizon_min / 60)} hours. At or above the <b>threshold</b> (dashed line) the page shows an alert. The threshold was chosen on validation data to maximise TSS. The score is <b>not</b> a calibrated probability.</p>
+          <p><b>Risk</b> is a model score for an M or X flare starting in the next {Math.round(D.model.horizon_min / 60)} hours. At or above the <b>threshold</b> (dashed line) the page shows an alert. The threshold was chosen on validation data to maximise TSS.{" "}
+            {D.model.calibrated
+              ? <>The score was calibrated on validation data (Platt scaling), so it is meant to track how often an M or X flare followed such a score; check the reliability plot in the run report before quoting it as a probability on a new period.</>
+              : <>The score is <b>not</b> a calibrated probability.</>}
+            {D.model.alert_levels && Object.keys(D.model.alert_levels).length > 1 && (
+              <> Alert levels fixed on validation data: {Object.entries(D.model.alert_levels).map(([k, v]) => `${k} ${pct(v)}`).join(", ")}. A higher level means fewer false alarms and fewer flares warned.</>
+            )}</p>
           <p>Drag on a chart to zoom, double-click to reset. Flare classes follow the GOES scale on 0.1–0.8 nm flux.</p>
         </div>
       </details>

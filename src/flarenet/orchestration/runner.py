@@ -167,7 +167,9 @@ def run_noaa_compare(
         bundle.df, int(d["window_min"]), 1440, 1440, channel_names=lm.channels,
         max_missing_frac=d.get("max_missing_frac", 1.0), starts=starts, **feature_kwargs(lm.config),
     )  # fmt: skip
-    _, _, prob = infer(lm.model, ws.X, lm.mu, lm.sg, device, now_bias=lm.now_bias)
+    _, _, prob = infer(
+        lm.model, ws.X, lm.mu, lm.sg, device, now_bias=lm.now_bias, calibration=lm.calibration
+    )
     y = ws.y_fc.astype(int)
     days = pd.to_datetime(bundle.unix_of(ws.t_end), unit="s", utc=True).floor("D")
 

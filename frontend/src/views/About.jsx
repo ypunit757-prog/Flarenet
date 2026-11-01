@@ -6,7 +6,7 @@ export default function About({ store }) {
     <div className="stack" style={{ maxWidth: 900 }}>
       <section className="card prose">
         <h2>What FlareNet does</h2>
-        <p>FlareNet reads the Sun's X-ray flux, one value per minute. The <b>nowcast</b> names the flare class happening right now. The <b>forecast</b> scores the chance of an M or X flare starting in the next six hours. Both come from one shared neural network, and an ensemble of three averages the scores.</p>
+        <p>FlareNet reads the Sun's X-ray flux, one value per minute. The <b>nowcast</b> names the flare class happening right now. The <b>forecast</b> scores the chance of an M or X flare starting in the next six hours. Both come from one shared neural network.</p>
         <h2>Flare classes</h2>
         <div className="wrapx">
           <table>
@@ -29,7 +29,7 @@ export default function About({ store }) {
         <ul>
           <li>It sees only X-ray flux. It has no sunspot or magnetic-field data, which operational forecasters use.</li>
           <li>It forecasts flares, not their effects. Geomagnetic storms from coronal mass ejections can arrive one to three days later and are not predicted here.</li>
-          <li>The threshold maximises TSS on validation data. The score is not a calibrated chance.</li>
+          <li>The threshold maximises TSS on validation data. {D && D.model.calibrated ? "The score was calibrated on validation data, but it is only as good as that period resembles the next one." : "The score is not a calibrated chance."}</li>
           <li>All results are from GOES. ISRO Aditya-L1 and other missions are not tested yet.</li>
           <li>Flare times come from an NOAA-style rule on the flux and can differ by minutes from NOAA's list.</li>
         </ul>

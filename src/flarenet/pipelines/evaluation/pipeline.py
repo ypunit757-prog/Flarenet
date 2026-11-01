@@ -57,8 +57,9 @@ class LoadModelStage(Stage):
                 "model differently scaled inputs. Use the same features settings (or --set them)."
             )
         ctx.state["loaded"] = loaded
-        log.info("Loaded %s (alert threshold %.2f, channels %d)", path,
-                 ctx.state["loaded"].threshold, len(ctx.state["loaded"].channels))  # fmt: skip
+        log.info("Loaded %s (alert threshold %.2f, channels %d, %s probabilities)", path,
+                 loaded.threshold, len(loaded.channels),
+                 "calibrated" if loaded.calibration else "raw")  # fmt: skip
 
 
 class ScoreStage(Stage):
@@ -83,7 +84,8 @@ class ScoreStage(Stage):
             label = f"{name} ({'held-out test' if kind == 'test' else 'external'})"
             fdb = ctx.state["bundles"][name].flare_db
             res = evaluate_dataset(label, lm.model, ws.X, ws.y_now, ws.y_fc, ws.t_end, lm.mu, lm.sg,
-                                   lm.threshold, fdb, device, cfg.data.horizon_min, lm.now_bias)  # fmt: skip
+                                   lm.threshold, fdb, device, cfg.data.horizon_min, lm.now_bias,
+                                   lm.calibration, lm.alert_levels)  # fmt: skip
             res.kind = kind
             ev = cfg.evaluation
             res.ci = block_bootstrap_ci(res.forecast_true, res.forecast_prob, res.times, lm.threshold,

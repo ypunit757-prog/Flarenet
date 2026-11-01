@@ -16,6 +16,7 @@ from flarenet.core.schema import WindowSet
 from flarenet.core.utils import get_logger, resolve_device, set_seed
 from flarenet.models import ENCODER_MODULES, EnsembleModel, build_model, count_parameters
 from flarenet.models.losses import FocalBCE, LabelSmoothedCE, class_weights
+from flarenet.pipelines.evaluation.calibration import alert_levels, apply_calibration, fit_platt
 from flarenet.pipelines.evaluation.metrics import best_threshold, safe_auc
 from flarenet.pipelines.training.checkpoint import load_checkpoint, save_checkpoint
 from flarenet.pipelines.training.dataset import WindowDataset
@@ -341,14 +342,44 @@ def train_model(
         bias = tune_nowcast_bias(now_val, val.y_now)
         log.info("Nowcast class offsets tuned on validation: %s", np.round(bias, 2).tolist())
 
+    # Calibration and alert levels use the final model's raw probabilities on the validation windows, which keep
+    # the natural flare frequency (training batches are re-balanced, so the raw output over-states it).
+    _, fc_val = predict_logits(model, val_ds.X, device)
+    calibration, p_val = None, fc_val
+    if tc.calibrate == "platt":
+        calibration = fit_platt(val.y_fc, fc_val)
+        if calibration is None:
+            log.warning(
+                "Platt calibration skipped: the validation windows have too few flare or quiet windows"
+            )
+        else:
+            p_val = apply_calibration(calibration, fc_val)
+            best_thr, best_tss = best_threshold(val.y_fc, p_val, smooth=tc.threshold_smooth)
+            yv = np.asarray(val.y_fc, dtype=float)
+            log.info(
+                "Platt calibration on validation: sigmoid(%.3f * logit(p) %+.3f) | mean probability %.3f -> %.3f "
+                "(flare frequency %.3f) | Brier %.4f -> %.4f",
+                calibration["a"], calibration["b"], float(fc_val.mean()), float(p_val.mean()), float(yv.mean()),
+                float(np.mean((fc_val - yv) ** 2)), float(np.mean((p_val - yv) ** 2)),
+            )  # fmt: skip
+    levels = alert_levels(val.y_fc, p_val, tc.sensitive_pod, tc.strict_far, tc.threshold_smooth)
+    for name, lv in levels.items():
+        log.info(
+            "Alert level %-9s %s", name,
+            "not reachable on validation" if lv is None else
+            f"threshold {lv['threshold']:.3f} | validation POD {lv['POD']:.2f} FAR {lv['FAR']:.2f} TSS {lv['TSS']:.2f}",
+        )  # fmt: skip
+
     save_checkpoint(
         out_dir / "checkpoint.pt", model, train_ds.mu, train_ds.sg, best_thr, cfg,
         train.channels, [n for n in train.source_names if n != "_"], bias,
+        calibration, levels,
     )  # fmt: skip
     log.info("Best val TSS %.4f at alert threshold %.2f", best_tss, best_thr)
     return {
         "history": first["history"], "threshold": best_thr, "best_val_tss": best_tss,
         "n_parameters": count_parameters(model), "n_trainable": first["n_trainable"] * len(members),
         "now_bias": None if bias is None else bias.tolist(),
+        "calibration": calibration, "alert_levels": levels,
         "member_histories": [mm["history"] for mm in members],
     }  # fmt: skip

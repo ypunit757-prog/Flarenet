@@ -11,7 +11,7 @@ import numpy as np
 from flarenet.core.pipeline import Pipeline, PipelineContext, Stage
 from flarenet.core.schema import SchemaError, WindowSet
 from flarenet.core.utils import fingerprint, get_logger
-from flarenet.pipelines.features.split import block_split
+from flarenet.pipelines.features.split import block_split, chrono_split
 from flarenet.pipelines.features.windows import build_windows
 
 log = get_logger(__name__)
@@ -116,7 +116,11 @@ class SplitStage(Stage):
             if spec.role == "eval":
                 evals[name] = ws
                 continue
-            parts = block_split(ws, d.block_days, d.train_frac, d.val_frac, cfg.seed + i)
+            if d.split == "chrono":
+                gap = d.window_min - 1 + d.horizon_min
+                parts = chrono_split(ws, d.train_frac, d.val_frac, gap)
+            else:
+                parts = block_split(ws, d.block_days, d.train_frac, d.val_frac, cfg.seed + i)
             if d.train_stride_min and d.train_stride_min != d.stride_min:
                 # finer windows are for training only: val / test stay on the stride_min grid
                 for k in ("val", "test"):
@@ -137,7 +141,8 @@ class SplitStage(Stage):
             if len(out["train"]) == 0 or len(out["val"]) == 0:
                 raise SchemaError(
                     "Train or validation split is empty. The series is too short for "
-                    f"data.block_days={d.block_days}: lower block_days or fetch more data."
+                    f"data.block_days={d.block_days} (split={d.split}): lower block_days, change "
+                    "train_frac/val_frac, or fetch more data."
                 )
         ctx.state["splits"] = out
 

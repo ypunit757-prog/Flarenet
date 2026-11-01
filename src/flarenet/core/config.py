@@ -53,6 +53,12 @@ class DataConfig:
     train_stride_min: int | None = None
     # Drop train/val windows whose input or forecast span overlaps a window of another split.
     purge: bool = False
+    # How a train source is divided: "block" shuffles 3-day blocks over the whole series (the original rule;
+    # validation then shares active periods with training and looks better than a new period really is);
+    # "chrono" puts the earliest part in train, the next in validation and the latest in test, with a gap
+    # between them, so the alert threshold and the calibration are fitted on a later period than the one
+    # the weights were trained on.
+    split: str = "block"
 
 
 @dataclass
@@ -107,6 +113,14 @@ class TrainConfig:
     nowcast_bias_tuning: bool = False  # tune per-class logit offsets on val for macro-F1
     threshold_smooth: int = 0  # smooth val TSS over +-N threshold steps before taking the max
     ensemble_size: int = 1  # members trained with different seeds, probabilities averaged
+    # Map the model's raw forecast probability to the observed frequency, fitted on the validation windows
+    # (Platt scaling, monotone, so ranking metrics such as AUC are unchanged). "none" keeps the raw output.
+    calibrate: str = "none"  # none | platt
+    # Extra alert levels stored with the checkpoint, chosen on validation (the default alert level is
+    # always the TSS-optimal one): "sensitive" catches at least this share of forecast-positive windows,
+    # "strict" allows at most this share of false alarms among the alerts.
+    sensitive_pod: float = 0.90
+    strict_far: float = 0.50
     # --- instrument-robustness augmentation (train windows only; 0 = off) ---
     aug_level_jitter: float = 0.0  # sigma (log10 units) of a random per-window flux-level shift
     aug_hxr_dropout: float = 0.0  # probability a window's hard channel is replaced by the soft one
@@ -216,6 +230,8 @@ class Config:
         d = self.data
         if not 0 < d.train_frac < 1 or not 0 < d.val_frac < 1 or d.train_frac + d.val_frac >= 1:
             raise ValueError("data.train_frac and data.val_frac must leave room for a test split")
+        if d.split not in ("block", "chrono"):
+            raise ValueError(f"data.split must be 'block' or 'chrono', got {d.split!r}")
         if d.window_min < 8 or d.stride_min < 1 or d.horizon_min < 1:
             raise ValueError("data.window_min must be >= 8, stride_min and horizon_min >= 1")
         if d.train_stride_min is not None and not 1 <= d.train_stride_min <= d.stride_min:
@@ -241,6 +257,10 @@ class Config:
                 raise ValueError(
                     f"training.{key} must be one of {allowed}, got {getattr(t, key)!r}"
                 )
+        if t.calibrate not in ("none", "platt"):
+            raise ValueError(f"training.calibrate must be 'none' or 'platt', got {t.calibrate!r}")
+        if not 0.0 < t.sensitive_pod < 1.0 or not 0.0 < t.strict_far < 1.0:
+            raise ValueError("training.sensitive_pod and training.strict_far must be in (0, 1)")
         if not 0.0 <= t.ema_decay < 1.0:
             raise ValueError("training.ema_decay must be in [0, 1)")
         if t.ensemble_size < 1 or t.threshold_smooth < 0:

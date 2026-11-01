@@ -39,8 +39,9 @@ def forecast_bundle(loaded, bundle, device, for_latest_only: bool = False) -> pd
     if for_latest_only:
         ws = ws.subset(slice(-1, None))
     pred_cls, _, prob = infer(
-        loaded.model, ws.X, loaded.mu, loaded.sg, device, now_bias=loaded.now_bias
-    )
+        loaded.model, ws.X, loaded.mu, loaded.sg, device,
+        now_bias=loaded.now_bias, calibration=loaded.calibration,
+    )  # fmt: skip
     unix = bundle.unix_of(ws.t_end)
     return pd.DataFrame(
         {

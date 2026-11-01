@@ -1,0 +1,50 @@
+# The same data and model as configs/noaa_all.yaml, trained with an honest validation set and calibrated probabilities.
+#   uv run flarenet run -c configs/noaa_all_chrono.yaml
+#   uv run python scripts/compare_runs.py runs/goes_all runs/goes_all_chrono
+#
+# What differs from noaa_all.yaml (nothing else):
+#   data.split: chrono       train = earliest part of GOES-16, validation = a later year, test = the latest months,
+#                            with a gap between them. noaa_all.yaml shuffles 3-day blocks over all eight years, so its
+#                            validation set sits inside the same active periods as training and looks better than a
+#                            new period really is (validation TSS 0.78 against 0.44 on GOES-18). The alert threshold
+#                            and the calibration are now fitted on a period the weights never saw.
+#   training.calibrate: platt  probabilities are mapped onto the observed flare frequency (monotone: AUC unchanged).
+#   training.threshold_smooth: 2  average the validation TSS curve over neighbouring thresholds before picking its peak.
+#   run_name                 a new run folder, so runs/goes_all stays for comparison.
+#
+# Held-out "goes16_all" numbers from this run (the latest ~10 % of GOES-16, mid-2024 to April 2025) are NOT comparable
+# with those of the block-split run. Compare the two runs on goes18_test only: same satellite and months for both.
+# The first run reuses everything already downloaded in data/ (it only retrains).
+seed: 42
+run_name: goes_all_chrono
+data:
+  max_missing_frac: 0.25
+  split: chrono
+  train_frac: 0.78
+  val_frac: 0.12
+training:
+  epochs: 40
+  device: auto
+  calibrate: platt
+  threshold_smooth: 2
+  sensitive_pod: 0.90
+  strict_far: 0.50
+sources:
+  - name: goes16_all
+    kind: nasa_goes_ncei
+    role: train
+    params:
+      satellite: 16
+      start: 2017-03-01
+      end: 2025-04-07
+      max_missing_days: 120
+      workers: 4
+  - name: goes18_test
+    kind: nasa_goes_ncei
+    role: eval
+    params:
+      satellite: 18
+      start: 2025-04-08
+      end: 2026-09-30
+      max_missing_days: 30
+      workers: 4

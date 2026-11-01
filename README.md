@@ -150,6 +150,12 @@ on the training detector. **It has not been shown to beat NOAA, and no real ISRO
 Guide: [`docs/UNIVERSAL_INSTRUMENTS.md`](docs/UNIVERSAL_INSTRUMENTS.md); configs `universal_multi_agency.yaml`,
 `noaa_daily.yaml`, `instrument_shift.yaml`.
 
+## A fairer 6-hour validation set and calibrated probabilities
+
+`configs/noaa_all_chrono.yaml` retrains the 6-hour model with a chronological train / validation / test split, Platt-calibrated
+probabilities and three alert levels (sensitive, balanced, strict) stored in the checkpoint; `scripts/compare_runs.py` compares
+two runs on the satellite neither trained on. Why, how to run it and how to read it: [`docs/CHRONO_CALIBRATION.md`](docs/CHRONO_CALIBRATION.md).
+
 ## Daily forecast vs NOAA (same days)
 
 `flarenet daily` forecasts "will an M-class flare start tomorrow (UTC)?" at 22:00 UTC from the GOES flux, flare history
@@ -243,7 +249,7 @@ src/flarenet/
   daily/           day-level forecaster vs NOAA: NOAA text parsers, features, model, walk-forward evaluation, live prediction
   orchestration/   workflows that compose the pipelines (train, evaluate, run, predict)
 configs/           default (improved), fast (original), NASA / cross-instrument / live examples, experiments/
-tests/             199 tests: sources, HTTP, labelers, features, split, metrics, config, end-to-end runs
+tests/             210 tests: sources, HTTP, labelers, features, split, metrics, config, end-to-end runs
 docs/              DAILY_VS_NOAA.md, FORWARD_TEST.md, ARCHITECTURE.md, IMPROVEMENTS.md, NASA_DATA.md, ADDING_A_SOURCE.md, APPLE_SILICON.md
 scripts/           daily_predict.py (tomorrow's forecast + forward log), daily_freeze.py, daily_forward_score.py, daily_consistency.py, headroom_check.py, case_study.py (historical flares), export_web.py (data for the frontend), example run scripts
 frontend/          React + Vite dashboard (deploy on Vercel)
