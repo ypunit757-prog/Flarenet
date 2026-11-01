@@ -1,7 +1,7 @@
 Put the trained checkpoint used for the live forecast here as `flarenet.pt`:
 
 ```bash
-cp runs/goes_recent/checkpoint.pt models/flarenet.pt
+cp runs/goes_all_chrono/checkpoint.pt models/flarenet.pt   # chronological validation, calibrated (see docs/CHRONO_CALIBRATION.md)
 ```
 
 It is small (about 1.5 MB), and `.gitignore` allows this one file. The scheduled job in

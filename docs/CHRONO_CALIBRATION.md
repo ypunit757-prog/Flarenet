@@ -46,14 +46,47 @@ shuffled-block test against the latest 10 % of the series).
 Nothing here has been run on the real GOES data from the build environment (the NOAA/NCEI servers are not reachable
 there): only on simulated data and unit tests. The numbers come from your run.
 
+## First real run (GOES-16 2017-03 to 2025-04 for training, GOES-18 2025-04 to 2026-09 for testing)
+
+Same data and model; only the split, the calibration and the threshold rule differ. Both runs scored on GOES-18, which neither
+trained on (393 M/X flares):
+
+| | block split, raw (`goes_all`) | chronological, calibrated (`goes_all_chrono`) |
+|---|---|---|
+| validation TSS (the number the threshold was tuned on) | 0.78 | 0.41 |
+| forecast AUC | 0.808 [0.77, 0.84] | 0.810 [0.77, 0.84] |
+| forecast TSS | 0.443 [0.37, 0.50] | 0.446 [0.36, 0.52] |
+| HSS | 0.224 [0.18, 0.27] | 0.374 [0.30, 0.43] |
+| alert threshold | 0.48 | 0.19 |
+| windows alerted among forecast-positive (POD) / false alarms among alerts (FAR) | 0.81 / 0.75 | 0.58 / 0.60 |
+| M/X flares warned in time | 364 of 393 | 309 of 393 |
+| Brier score | 0.201 | 0.090 |
+| calibration error (ECE) | 0.321 | 0.010 |
+
+What it shows:
+
+- The diagnosis held. The block-split validation TSS (0.78) was far above what a new satellite and period gave (0.44); the
+  chronological validation TSS (0.41) agrees with it (0.45).
+- Ranking skill is unchanged (AUC and TSS identical within their intervals), as expected from a monotone calibration.
+- The probabilities are now meaningful: a calibration error of 0.01 on an unseen satellite and period, from 0.32.
+- The new default alert level is more conservative: fewer false alarms (60% against 75%) and fewer flares warned (309 against
+  364). That is a trade, not a free gain; TSS is the same. HSS is higher mostly because it rewards fewer false alarms.
+- Levels fixed on validation do not fully transfer: the balanced level promised POD 0.72 on validation and gave 0.58 on
+  GOES-18, the sensitive level promised 0.90 and gave 0.73. The false-alarm rates transferred (0.60 to 0.60 for balanced).
+  Expect a further drop in flares caught on a period that differs from validation.
+- The nowcast also scored higher on GOES-18 in this run (accuracy 0.974, macro-F1 0.55, against 0.94 and 0.42), but it was
+  one run, and this project's multi-seed tests (on simulated data) showed a large seed-to-seed spread in nowcast macro-F1, so that is not shown to be a real gain.
+
 ## Promoting the new model
 
 If the candidate is level or better on GOES-18:
 
 ```bash
 cp runs/goes_all_chrono/checkpoint.pt models/flarenet.pt
-git add models/flarenet.pt && git commit -m "6 h model: chronological validation, calibrated probabilities" && git push
+git add models/flarenet.pt frontend/src/lib/validation.js && git commit -m "promote the chronological, calibrated 6 h model" && git push
 ```
 
-The next Refresh forecast run publishes calibrated scores and the three alert levels (the dashboard shows them in "How to
-read this page"). The daily model and the forward test are separate and are not affected.
+Commit the checkpoint and the dashboard numbers (`frontend/src/lib/validation.js`) together, so the site never shows one
+model's numbers beside the other's forecast. The next Refresh forecast run publishes calibrated scores and the three alert
+levels (the dashboard lists them in "How to read this page"). The daily model and the forward test are separate and are not
+affected.
