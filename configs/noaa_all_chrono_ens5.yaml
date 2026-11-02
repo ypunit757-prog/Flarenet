@@ -1,0 +1,42 @@
+# configs/noaa_all_chrono.yaml with five networks (different seeds) whose probabilities are averaged.
+#   uv run flarenet run -c configs/noaa_all_chrono_ens5.yaml
+#   uv run python scripts/compare_runs.py runs/goes_all_chrono runs/goes_all_chrono_ens5 --paired
+#
+# Why: averaging several networks is the usual remedy for the large seed-to-seed spread of a small model, and the
+# published flare systems that report it use it (for example a ten-model average in a recent magnetogram transformer
+# system; see docs/IMPROVING_FURTHER.md). The calibration and the alert levels are fitted on the averaged probabilities.
+# Costs five times the training time of one run.
+seed: 42
+run_name: goes_all_chrono_ens5
+data:
+  max_missing_frac: 0.25
+  split: chrono
+  train_frac: 0.78
+  val_frac: 0.12
+training:
+  epochs: 40
+  device: auto
+  calibrate: platt
+  threshold_smooth: 2
+  sensitive_pod: 0.90
+  strict_far: 0.50
+  ensemble_size: 5
+sources:
+  - name: goes16_all
+    kind: nasa_goes_ncei
+    role: train
+    params:
+      satellite: 16
+      start: 2017-03-01
+      end: 2025-04-07
+      max_missing_days: 120
+      workers: 4
+  - name: goes18_test
+    kind: nasa_goes_ncei
+    role: eval
+    params:
+      satellite: 18
+      start: 2025-04-08
+      end: 2026-09-30
+      max_missing_days: 30
+      workers: 4

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import numpy as np
+import pandas as pd
 
 from flarenet import __version__
 from flarenet.core.pipeline import Pipeline, PipelineContext, Stage
@@ -124,6 +125,18 @@ class MetricsStage(Stage):
                 ctx.run_dir / f"flare_db_{name}.csv", index=False
             )
             res.lead.to_csv(ctx.run_dir / f"lead_time_{name}.csv", index=False)
+            # one row per scored window, so two runs can be compared on identical windows (scripts/compare_runs.py --paired)
+            unix = ctx.state["bundles"][name].unix_of(res.times)
+            pd.DataFrame(
+                {
+                    "t_end": res.times,
+                    "time_utc": pd.to_datetime(unix, unit="s", utc=True).strftime(
+                        "%Y-%m-%dT%H:%M:%S"
+                    ),
+                    "y": res.forecast_true,
+                    "p": res.forecast_prob,
+                }
+            ).to_csv(ctx.run_dir / f"window_predictions_{name}.csv", index=False)
 
 
 class MarkdownStage(Stage):

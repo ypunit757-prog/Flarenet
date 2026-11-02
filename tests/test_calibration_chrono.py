@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 from conftest import tiny_cfg
 
@@ -154,3 +155,65 @@ def test_compare_runs_prints_both_runs_on_the_external_dataset(tmp_path, capsys)
         "goes18_test" in out and "goes16_all" not in out
     )  # only the dataset neither run trained on
     assert "calibrated" in out and "0.810 [0.79, 0.83]" in out and "strict" in out
+
+
+def test_paired_bootstrap_sees_a_small_gain_that_separate_intervals_would_hide():
+    from flarenet.pipelines.evaluation.paired import paired_block_bootstrap, reading
+
+    rng = np.random.default_rng(5)
+    n = 6000
+    t = np.arange(n) * 60.0
+    z = rng.normal(size=n)
+    y = (rng.random(n) < 1 / (1 + np.exp(-(1.2 * z - 1.5)))).astype(int)
+    pa = 1 / (
+        1 + np.exp(-(1.2 * z + rng.normal(scale=1.0, size=n) - 1.5))
+    )  # B sees the same signal, less noise
+    pb = 1 / (1 + np.exp(-(1.2 * z + 0.4 * rng.normal(size=n) - 1.5)))
+    res = paired_block_bootstrap(y, pa, pb, t, 0.2, 0.2, block_hours=24, n=300, seed=1)
+    assert (
+        res["AUC"]["diff"] > 0
+        and res["AUC"]["ci95"][0] > 0
+        and reading("AUC", res["AUC"]) == "B better"
+    )
+    assert res["Brier"]["diff"] < 0 and reading("Brier", res["Brier"]) == "B better"
+    same = paired_block_bootstrap(y, pa, pa, t, 0.2, 0.2, block_hours=24, n=200, seed=1)
+    assert same["AUC"]["diff"] == 0 and reading("AUC", same["AUC"]) == "no established difference"
+    with pytest.raises(ValueError):
+        paired_block_bootstrap(y, pa[:-1], pb, t)
+
+
+@pytest.mark.slow
+def test_tuner_scores_validation_only_and_writes_a_runnable_config(tmp_path):
+    import sys
+    from pathlib import Path
+
+    import yaml
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from tune_6h import search
+
+    cfg = tiny_cfg(tmp_path, epochs=2)
+    cfg.data.split = "chrono"
+    cfg.data.train_frac, cfg.data.val_frac = 0.6, 0.2
+    cfg.sources[0].params = {"n_days": 120}
+    cfg.validate()
+    space = {"training.lr": [5e-4, 1e-3], "model.dropout": [0.2, 0.4]}
+    out = tmp_path / "tune"
+    table, best_path = search(
+        cfg, {"seed": 1}, out, trials=2, confirm=1, confirm_seeds=1, space=space
+    )
+    rows = pd.read_csv(out / "trials.csv")
+    assert set(rows["trial"]) == {0, 1, 2}
+    assert rows["val_auc"].between(0, 1).all() and (rows["val_brier"] > 0).all()
+    # the baseline and the confirmed trial were re-run with a second seed; the other trial was not
+    assert (rows.groupby("trial")["seed"].count() >= 1).all() and rows["seed"].nunique() == 2
+    assert "Tuning of" in (out / "tuning_report.md").read_text()
+    best = yaml.safe_load(best_path.read_text())
+    assert best["run_name"] == "t_tuned" and best["training"]["calibrate"] == "platt"
+    from flarenet.core.config import load_config
+
+    load_config(best_path)  # the written file loads and validates
+    # resuming does no new training
+    n = len(rows)
+    search(cfg, {"seed": 1}, out, trials=2, confirm=1, confirm_seeds=1, resume=True, space=space)
+    assert len(pd.read_csv(out / "trials.csv")) == n
