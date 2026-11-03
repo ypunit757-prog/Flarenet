@@ -217,3 +217,51 @@ def test_tuner_scores_validation_only_and_writes_a_runnable_config(tmp_path):
     n = len(rows)
     search(cfg, {"seed": 1}, out, trials=2, confirm=1, confirm_seeds=1, resume=True, space=space)
     assert len(pd.read_csv(out / "trials.csv")) == n
+
+
+def _fake_run(tmp_path, name, p, y, t_end, thr, with_csv=True):
+    import json
+
+    d = tmp_path / name
+    d.mkdir()
+    res = {
+        "kind": "external", "AUC": 0.8, "TSS": 0.4, "HSS": 0.3, "POD": 0.8, "FAR": 0.6,
+        "confidence_95": {}, "calibration": {"brier": 0.1, "ece": 0.05}, "lead_time": {}, "alert_levels": {},
+    }  # fmt: skip
+    (d / "metrics_report.json").write_text(
+        json.dumps({"alert_threshold": thr, "calibration": None, "results": {"goes18_test": res}})
+    )
+    if with_csv:
+        pd.DataFrame({"t_end": t_end, "time_utc": "x", "y": y, "p": p}).to_csv(
+            d / "window_predictions_goes18_test.csv", index=False
+        )
+    return d
+
+
+def test_compare_runs_paired_flag_prints_the_paired_table_or_says_why_not(tmp_path, capsys):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from compare_runs import main
+
+    rng = np.random.default_rng(3)
+    n = 3000
+    t = np.arange(n) * 60.0
+    z = rng.normal(size=n)
+    y = (rng.random(n) < 1 / (1 + np.exp(-(1.5 * z - 1)))).astype(int)
+    pa = 1 / (1 + np.exp(-(z + rng.normal(scale=1.0, size=n))))
+    pb = 1 / (1 + np.exp(-(z + rng.normal(scale=0.3, size=n))))  # the better model
+    a = _fake_run(tmp_path, "a", pa, y, t, 0.4)
+    b = _fake_run(tmp_path, "b", pb, y, t, 0.4)
+    assert main([str(a), str(b), "--paired", "--bootstrap", "60"]) == 0
+    out = capsys.readouterr().out
+    assert "b minus a on the same 3000 windows" in out and "| AUC |" in out and "B better" in out
+
+    c = _fake_run(
+        tmp_path, "c", pb, y, t, 0.4, with_csv=False
+    )  # a run scored before predictions were saved
+    assert main([str(a), str(c), "--paired"]) == 0
+    assert "skipped: missing" in capsys.readouterr().out
+    assert main([str(a), str(b)]) == 0  # without the flag there is no paired section
+    assert "minus" not in capsys.readouterr().out

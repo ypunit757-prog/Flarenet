@@ -142,6 +142,8 @@ def main(argv=None) -> int:
                     print(
                         f"| {lname} | {_f(x['threshold'])} | {_f(x['POD'])} | {_f(x['FAR'])} | {_f(x['TSS'])} |"
                     )
+        if a.paired:
+            _paired(a.run_a, a.run_b, ra, rb, key, names, a.bootstrap)
     print(
         "\nIf the AUC and TSS intervals overlap, ranking skill is not shown to differ. Prefer the candidate when it is "
         "level on those and better on Brier/ECE, because its threshold and probabilities were fitted on a later period."
