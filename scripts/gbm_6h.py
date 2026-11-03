@@ -4,7 +4,8 @@
 
 Uses the checkpoint ``runs/<run_name>/checkpoint.pt`` of the config (or ``--checkpoint``) and the windows already cached
 by ``flarenet run``; it needs no new downloads. About 5 to 10 minutes on a laptop for the eight-year GOES-16 series
-(most of it building the features). Results go to ``runs/<run_name>_gbm/``:
+(most of it building the features). Add `--live-compatible` to leave out the features a live forecast could not compute (27-day
+rotation, 168-hour windows). Results go to ``runs/<run_name>_gbm/``:
 
     gbm6h_report.md    network vs tree model vs stack on validation, the later part of GOES-16 and GOES-18, with
                        paired intervals for the differences
@@ -24,7 +25,7 @@ from pathlib import Path
 
 from flarenet.core.config import load_config
 from flarenet.core.utils import resolve_device
-from flarenet.gbm6h.pipeline import fit_and_evaluate
+from flarenet.gbm6h.pipeline import LIVE_COMPATIBLE_DROP, fit_and_evaluate
 from flarenet.orchestration import runner as orch
 from flarenet.pipelines.training.checkpoint import load_checkpoint
 
@@ -40,6 +41,11 @@ def main(argv=None) -> int:
         default=60,
         help="minutes between training windows of the tree model",
     )
+    ap.add_argument("--live-compatible", action="store_true",
+                    help="drop the features the live NOAA feed (7 days of history) cannot provide: rot_* and *168*")  # fmt: skip
+    ap.add_argument(
+        "--drop", default="", help="comma-separated column patterns to leave out, e.g. 'rot_*,h_*'"
+    )
     ap.add_argument("--bootstrap", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args(argv)
@@ -52,9 +58,13 @@ def main(argv=None) -> int:
     device = resolve_device(cfg.training.device)
     lm = load_checkpoint(ckpt, device)
     ctx = orch.run_features(cfg)
-    out = Path(a.out) if a.out else Path(cfg.paths.runs_dir) / f"{cfg.run_name}_gbm"
+    drop = tuple(p for p in a.drop.split(",") if p) + (
+        LIVE_COMPATIBLE_DROP if a.live_compatible else ()
+    )
+    suffix = "_gbm_live" if a.live_compatible else "_gbm"
+    out = Path(a.out) if a.out else Path(cfg.paths.runs_dir) / f"{cfg.run_name}{suffix}"
     fit_and_evaluate(cfg, ctx.state["splits"], ctx.state["bundles"], lm, device, out,
-                     train_stride=a.train_stride, n_boot=a.bootstrap, seed=a.seed)  # fmt: skip
+                     train_stride=a.train_stride, n_boot=a.bootstrap, seed=a.seed, drop=drop)  # fmt: skip
     print((out / "gbm6h_report.md").read_text())
     print(f"Written to {out}/")
     return 0

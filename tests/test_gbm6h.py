@@ -13,7 +13,7 @@ from conftest import tiny_cfg
 from flarenet import orchestration as orch
 from flarenet.daily.features import events_table
 from flarenet.gbm6h import features as F
-from flarenet.gbm6h.pipeline import fit_and_evaluate
+from flarenet.gbm6h.pipeline import LIVE_COMPATIBLE_DROP, drop_features, fit_and_evaluate
 from flarenet.gbm6h.stack import Stack, fit_stack
 from flarenet.pipelines.training.checkpoint import load_checkpoint
 
@@ -161,3 +161,35 @@ def test_fit_and_evaluate_end_to_end_on_the_synthetic_sun(tmp_path):
         0, 1
     ).all()
     assert len(events_table(ctx.state["bundles"]["synthetic"])) > 0
+
+
+def test_drop_features_matches_patterns_and_reports_what_went():
+    tab = pd.DataFrame(
+        columns=["f_cur", "f_max_168h", "h_nM_168", "rot_nM_slot", "h_nM_24"], dtype=float
+    )
+    kept, gone = drop_features(tab, LIVE_COMPATIBLE_DROP)
+    assert list(kept.columns) == ["f_cur", "h_nM_24"]
+    assert gone == ["f_max_168h", "h_nM_168", "rot_nM_slot"]
+    assert list(drop_features(tab, ())[0].columns) == list(tab.columns)
+
+
+@pytest.mark.slow
+def test_live_compatible_run_uses_no_feature_the_live_feed_cannot_provide(tmp_path):
+    cfg = tiny_cfg(tmp_path, epochs=2)
+    cfg.data.split = "chrono"
+    cfg.data.train_frac, cfg.data.val_frac = 0.6, 0.2
+    cfg.training.calibrate = "platt"
+    cfg.sources[0].params = {"n_days": 120}
+    cfg.validate()
+    orch.run_all(cfg)
+    lm = load_checkpoint(cfg.run_dir / "checkpoint.pt", "cpu")
+    ctx = orch.run_features(cfg)
+    out = tmp_path / "live"
+    rep = fit_and_evaluate(
+        cfg, ctx.state["splits"], ctx.state["bundles"], lm, torch.device("cpu"), out,
+        n_boot=20, drop=LIVE_COMPATIBLE_DROP,
+    )  # fmt: skip
+    used = rep["features_used"]
+    assert used and not any(c.startswith("rot_") or "168" in c for c in used)
+    assert any(c.startswith("rot_") for c in rep["features_dropped"])
+    assert "Features left out" in (out / "gbm6h_report.md").read_text()

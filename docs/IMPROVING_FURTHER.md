@@ -1,8 +1,8 @@
 # Improving the 6-hour model further, and measuring whether it worked
 
-Nothing in this file claims a gain. Every tool below produces a number on data the model has not seen; a change is kept
-only if that number says so. The real GOES data cannot be reached from the environment this was written in, so none of
-these runs have been done on it: the commands are yours to run and the results yours to read.
+Every tool below produces a number on data the model has not seen; a change is kept only if that number says so. The
+real GOES data could not be reached from the environment this was written in, so every figure in this file comes from
+a run on your machine. The first results are recorded at the end.
 
 ## What was added
 
@@ -72,6 +72,7 @@ is unknown until the paired table says.
 
 ```bash
 uv run python scripts/gbm_6h.py -c configs/noaa_all_chrono.yaml
+uv run python scripts/gbm_6h.py -c configs/noaa_all_chrono.yaml --live-compatible   # only features the live feed can give
 ```
 
 The network sees the last 90 minutes. Whether an M/X flare starts in the next six hours also depends on the last days:
@@ -135,3 +136,39 @@ the validation set is two orders of magnitude larger, but read the stack-minus-n
 
 Keep any change only if its paired interval on GOES-18 excludes zero in the right direction; otherwise the current model
 stands, and that is a result worth recording too.
+
+## First real results (run on GOES-16 training data, tested on GOES-18)
+
+**Old model against the chronological, calibrated model** (`compare_runs.py --paired`, 12,668 windows, 393 M/X flares):
+AUC +0.002 (95 % interval -0.004 to +0.007), Brier -0.111 (-0.123 to -0.100), TSS +0.004 (-0.053 to +0.057). The
+calibrated model ranks windows as well as the old one, to within about 0.007 AUC, and its probabilities are far
+better; at its default alert it warns 58 % of flares against 81 % and 60 % of its alerts are false against 75 %.
+That is a different operating point on the same ranking, not a gain in skill. The pairing made the AUC interval about
+six times narrower than the separate intervals (about +-0.035).
+
+**Tree model and stack against the network alone** (`gbm_6h.py`, same GOES-18 windows, 1,646 followed by an M/X flare;
+stack weights 0.34 on the network and 0.66 on the trees, fitted on 8,258 validation windows):
+
+| GOES-18 | network | tree model | stack | stack minus network (95 % interval) |
+|---|---|---|---|---|
+| AUC | 0.810 | 0.828 | 0.828 | +0.0186 (0.0095 to 0.0284) |
+| Brier | 0.0896 | 0.0875 | 0.0865 | -0.0031 (-0.0045 to -0.0017) |
+| TSS | 0.446 | 0.471 | 0.479 | +0.0325 (0.0082 to 0.0576) |
+| POD | 0.578 | 0.601 | 0.606 | +0.0286 (0.0024 to 0.0568) |
+| FAR | 0.603 | 0.591 | 0.584 | -0.0191 (-0.0382 to -0.0018) |
+
+All five intervals exclude zero in the stack's favour on the satellite neither model trained on. The tree model alone
+also beats the network on AUC (+0.0187, 0.0064 to 0.0316). On the weaker check, the later part of GOES-16 (6,878
+windows), the AUC difference is +0.0067 (-0.0016 to +0.0149), not established; Brier improves (-0.0040), POD improves
+(+0.029) and FAR worsens (+0.012).
+
+What this does and does not show:
+
+- It is one test period on one satellite. The gain on GOES-18 (+0.019 AUC) is larger than on the later GOES-16 period
+  (+0.007, not established), so "about +0.01 to +0.02 AUC" is the honest range until more data says otherwise.
+- The tree model used 27-day rotation features and 168-hour windows. The live NOAA feed reaches back only 7 days, so a
+  live forecast cannot compute them. `--live-compatible` refits without them; the stack goes into the live forecast only
+  if the gain survives that.
+- GOES-18 has now been used for one adopt-or-reject decision. Each further candidate compared on it raises the chance
+  that one looks better by luck. Data after the config's end date (2026-09-30) is untouched and is the cleanest final
+  check; it will take months of activity to mean anything, as the Sun has been quiet.

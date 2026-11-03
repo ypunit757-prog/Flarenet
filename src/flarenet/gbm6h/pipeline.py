@@ -10,6 +10,7 @@ Nothing here touches the network's weights. Rules that keep the comparison hones
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import pickle
 import time
@@ -30,6 +31,15 @@ from flarenet.pipelines.evaluation.uncertainty import calibration_summary
 
 log = get_logger(__name__)
 MODELS = ("cnn", "gbm", "stack")
+# What a forecast made from the live NOAA feed can compute: that feed reaches back 7 days, so no 27-day rotation
+# features, and the 168-hour windows would be cut short at the very edge of the feed.
+LIVE_COMPATIBLE_DROP = ("rot_*", "*168*")
+
+
+def drop_features(table: pd.DataFrame, patterns) -> tuple[pd.DataFrame, list[str]]:
+    """Remove the columns whose name matches any shell-style pattern (``rot_*``, ``*168*``); returns the rest and what went."""
+    gone = [c for c in table.columns if any(fnmatch.fnmatch(c, p) for p in patterns)]
+    return table.drop(columns=gone), gone
 
 
 def scored(ws, bundles, lm, gbm: HourlyGBM, device, horizon_min: int, stride_min: int = 0):
@@ -53,7 +63,7 @@ def _metrics(y, p, thr: float) -> dict:
 
 def fit_and_evaluate(
     cfg, splits: dict, bundles: dict, lm, device, out: Path, train_stride: int = 60, n_boot: int = 1000,
-    seed: int = 0,
+    seed: int = 0, drop: tuple[str, ...] = (),
 ) -> dict:  # fmt: skip
     out.mkdir(parents=True, exist_ok=True)
     horizon = cfg.data.horizon_min
@@ -61,6 +71,7 @@ def fit_and_evaluate(
     t = time.time()
     tab, rows = set_features(splits["train"], bundles, horizon, train_stride)
     y_tr = np.asarray(splits["train"].y_fc)[rows].astype(int)
+    tab, dropped = drop_features(tab, drop)
     log.info("features for %d training windows in %.1f min", len(rows), (time.time() - t) / 60)
     t = time.time()
     gbm = HourlyGBM().fit(tab, y_tr)
@@ -76,6 +87,7 @@ def fit_and_evaluate(
     thr = {k: float(best_threshold(y_val, p, smooth=2)[0]) for k, p in val_p.items()}
     report: dict = {
         "checkpoint_run": cfg.run_name, "train_windows": int(len(y_tr)), "val_windows": int(len(y_val)),
+        "features_used": list(gbm.cols), "features_dropped": dropped,
         "stack": stack.to_dict() if stack else None,
         "stack_gbm_share": stack.share_gbm() if stack else None,
         "thresholds_from_validation": thr,
@@ -123,6 +135,9 @@ def _f(v, d=3) -> str:
 
 def render(rep: dict) -> str:
     L = ["# Tree model and stack against the network alone", ""]
+    if rep.get("features_dropped"):
+        L += [f"Features left out ({len(rep['features_dropped'])}): {', '.join(rep['features_dropped'])}. "
+              f"{len(rep['features_used'])} features used.", ""]  # fmt: skip
     if rep["stack"] is None:
         L += ["The stacking regression gave the tree model no positive weight (or there were too few flare windows in "
               "validation): **the tree model adds nothing to this network here; keep the network alone.**", ""]  # fmt: skip
