@@ -28,6 +28,7 @@ from case_study import case_table  # noqa: E402
 from flarenet.core.config import load_config  # noqa: E402
 from flarenet.core.constants import CLASS_NAMES  # noqa: E402
 from flarenet.core.utils import resolve_device  # noqa: E402
+from flarenet.gbm6h.live import load_live_stack  # noqa: E402
 from flarenet.orchestration import runner as orch  # noqa: E402
 from flarenet.pipelines import ingestion, preprocessing  # noqa: E402
 from flarenet.pipelines.inference.predict import forecast_bundle  # noqa: E402
@@ -42,9 +43,29 @@ def _round(a, n: int) -> list:
     return [None if not np.isfinite(v) else round(float(v), n) for v in a]
 
 
+def apply_stack(
+    fc: pd.DataFrame, bundle, stack_path: str, checkpoint_path: str
+) -> tuple[pd.DataFrame, dict]:
+    """Stack the tree model onto the network's forecasts, or return them unchanged with the reason why not.
+
+    Any failure (missing file, other checkpoint, other library version, a feature error) leaves the network's own
+    forecast in place: the live page must keep updating."""
+    live, why = load_live_stack(stack_path, checkpoint_path)
+    if live is None:
+        print(f"stack not used: {why}", file=sys.stderr)
+        return fc, {"used": False, "reason": why}
+    try:
+        out = live.apply(fc, bundle)
+    except Exception as e:  # noqa: BLE001
+        print(f"stack not used: {type(e).__name__}: {e}", file=sys.stderr)
+        return fc, {"used": False, "reason": f"{type(e).__name__}: {e}"}
+    return out, live.info(out)
+
+
 def build_payload(
-    bundle, lm, fc, fc_now, days: float, flare_class: str, cases: pd.DataFrame
-) -> dict:
+    bundle, lm, fc, fc_now, days: float, flare_class: str, cases: pd.DataFrame,
+    stack_info: dict | None = None,
+) -> dict:  # fmt: skip
     df = bundle.df
     t_all = bundle.unix_of(df["time_min"].to_numpy())
     t_end = t_all[-1]
@@ -80,6 +101,7 @@ def build_payload(
         for r in cases.itertuples()
     ]
     src = bundle.meta
+    stacked = bool(stack_info and stack_info.get("used"))
     return {
         "generated": _iso(datetime.now(timezone.utc).timestamp()),
         "source": {
@@ -91,13 +113,16 @@ def build_payload(
         },
         "model": {
             "name": lm.config.get("model", {}).get("name", "flarenet"),
-            "threshold": round(float(lm.threshold), 3),
-            "calibrated": bool(getattr(lm, "calibration", None)),
-            "alert_levels": {
+            "threshold": stack_info["threshold"] if stacked else round(float(lm.threshold), 3),
+            "calibrated": bool(getattr(lm, "calibration", None)) or stacked,
+            "alert_levels": stack_info["alert_levels"]
+            if stacked
+            else {
                 k: round(float(v["threshold"]), 3)
                 for k, v in (getattr(lm, "alert_levels", None) or {}).items()
                 if v
             },
+            **({"stack": stack_info} if stack_info is not None else {}),
             "window_min": int(lm.config["data"]["window_min"]),
             "horizon_min": int(lm.config["data"]["horizon_min"]),
         },
@@ -108,6 +133,7 @@ def build_payload(
             "p": _round(fc["p_mx_6h"].to_numpy()[fk], 3),
             "alert": [int(x) for x in fc["alert"].to_numpy()[fk]],
             "nowcast": [int(x) for x in nowc[fk]],
+            **({"stack": [int(x) for x in fc["stack_used"].to_numpy()[fk]]} if stacked else {}),
         },
         "flare_class_min": flare_class,
         "flares": flares,
@@ -147,6 +173,11 @@ def main(argv=None) -> int:
     ap.add_argument(
         "--metrics", default=None, help="a metrics_report.json to show on the dashboard"
     )
+    ap.add_argument(
+        "--stack", default=None,
+        help="stack file from scripts/gbm_6h.py --install: blend a tree model on the last 3 days of X-ray history with the "
+             "network. Used only if it was fitted with this checkpoint; otherwise the network alone is shown, with the reason",
+    )  # fmt: skip
     ap.add_argument("--set", action="append", default=[], help="config override key=value")
     ap.add_argument("--out", default="frontend/public/data.json")
     a = ap.parse_args(argv)
@@ -168,9 +199,12 @@ def main(argv=None) -> int:
     fine.config = {**lm.config, "data": {**lm.config["data"], "stride_min": 5}}
     fc_now = forecast_bundle(fine, bundle, device)
     horizon = int(lm.config["data"]["horizon_min"])
+    stack_info = None
+    if a.stack:
+        fc, stack_info = apply_stack(fc, bundle, a.stack, a.checkpoint)
     cases = case_table(bundle, fc, fc_now, lm.threshold, horizon, a.flare_class)
     # class label text: GOES sources get e.g. X8.8 from the flux, others the plain class letter
-    payload = build_payload(bundle, lm, fc, fc_now, a.days, a.flare_class, cases)
+    payload = build_payload(bundle, lm, fc, fc_now, a.days, a.flare_class, cases, stack_info)
     if a.metrics:
         payload["metrics"] = metrics_block(a.metrics, source)
     out = Path(a.out)

@@ -20,6 +20,7 @@ zero, the tree model adds nothing measurable and the network alone stays.
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -46,10 +47,17 @@ def main(argv=None) -> int:
     ap.add_argument(
         "--drop", default="", help="comma-separated column patterns to leave out, e.g. 'rot_*,h_*'"
     )
+    ap.add_argument("--install", metavar="PATH",
+                    help="also copy the stack file for the live forecast to PATH (e.g. models/gbm6h_live.pkl); needs --live-compatible")  # fmt: skip
     ap.add_argument("--bootstrap", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args(argv)
 
+    if a.install and not a.live_compatible:
+        print(
+            "--install needs --live-compatible: the live feed cannot provide the 27-day and 168-hour features."
+        )
+        return 2
     cfg = load_config(a.config)
     ckpt = Path(a.checkpoint) if a.checkpoint else cfg.run_dir / "checkpoint.pt"
     if not ckpt.exists():
@@ -64,9 +72,21 @@ def main(argv=None) -> int:
     suffix = "_gbm_live" if a.live_compatible else "_gbm"
     out = Path(a.out) if a.out else Path(cfg.paths.runs_dir) / f"{cfg.run_name}{suffix}"
     fit_and_evaluate(cfg, ctx.state["splits"], ctx.state["bundles"], lm, device, out,
-                     train_stride=a.train_stride, n_boot=a.bootstrap, seed=a.seed, drop=drop)  # fmt: skip
+                     train_stride=a.train_stride, n_boot=a.bootstrap, seed=a.seed, drop=drop, checkpoint_path=ckpt)  # fmt: skip
     print((out / "gbm6h_report.md").read_text())
     print(f"Written to {out}/")
+    if a.install:
+        from flarenet.gbm6h.live import load_live_stack
+
+        ok, why = load_live_stack(out / "gbm6h.pkl", ckpt)
+        if ok is None:
+            print(f"Not installed: {why}.")
+            return 3
+        Path(a.install).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(out / "gbm6h.pkl", a.install)
+        print(
+            f"Installed {a.install} (valid only with {ckpt}); commit it next to models/flarenet.pt."
+        )
     return 0
 
 

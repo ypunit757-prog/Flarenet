@@ -21,8 +21,10 @@ import pandas as pd
 
 from flarenet.core.utils import get_logger
 from flarenet.gbm6h.features import set_features
+from flarenet.gbm6h.live import file_sha256, package
 from flarenet.gbm6h.model import HourlyGBM
 from flarenet.gbm6h.stack import fit_stack
+from flarenet.pipelines.evaluation.calibration import alert_levels
 from flarenet.pipelines.evaluation.metrics import best_threshold, safe_auc, score_at_threshold
 from flarenet.pipelines.evaluation.paired import paired_block_bootstrap, reading
 from flarenet.pipelines.evaluation.pipeline import align_channels
@@ -63,7 +65,7 @@ def _metrics(y, p, thr: float) -> dict:
 
 def fit_and_evaluate(
     cfg, splits: dict, bundles: dict, lm, device, out: Path, train_stride: int = 60, n_boot: int = 1000,
-    seed: int = 0, drop: tuple[str, ...] = (),
+    seed: int = 0, drop: tuple[str, ...] = (), checkpoint_path: Path | None = None,
 ) -> dict:  # fmt: skip
     out.mkdir(parents=True, exist_ok=True)
     horizon = cfg.data.horizon_min
@@ -78,16 +80,17 @@ def fit_and_evaluate(
     log.info("tree model fitted on %d windows (%d flare-positive) in %.1f min",
              len(y_tr), int(y_tr.sum()), (time.time() - t) / 60)  # fmt: skip
 
-    v_ws, _, v_cnn, v_gbm = scored(splits["val"], bundles, lm, gbm, device, horizon)
+    v_ws, v_tab, v_cnn, v_gbm = scored(splits["val"], bundles, lm, gbm, device, horizon)
     y_val = np.asarray(v_ws.y_fc).astype(int)
     stack = fit_stack(y_val, v_cnn, v_gbm)
     val_p = {"cnn": v_cnn, "gbm": v_gbm}
     if stack is not None:
         val_p["stack"] = stack.predict(v_cnn, v_gbm)
     thr = {k: float(best_threshold(y_val, p, smooth=2)[0]) for k, p in val_p.items()}
+    levels = alert_levels(y_val, val_p["stack"], smooth=2) if stack is not None else {}
     report: dict = {
         "checkpoint_run": cfg.run_name, "train_windows": int(len(y_tr)), "val_windows": int(len(y_val)),
-        "features_used": list(gbm.cols), "features_dropped": dropped,
+        "features_used": list(gbm.cols), "features_dropped": dropped, "alert_levels_validation": levels,
         "stack": stack.to_dict() if stack else None,
         "stack_gbm_share": stack.share_gbm() if stack else None,
         "thresholds_from_validation": thr,
@@ -122,8 +125,13 @@ def fit_and_evaluate(
             {"t_end": sub.t_end, "y": y, **{f"p_{k}": p for k, p in probs.items()}}
         ).to_csv(out / f"gbm6h_predictions_{name.split(' ')[0]}.csv", index=False)
 
+    # a few validation rows and the probabilities they gave now: a machine that gives other numbers is refused later
+    pick = np.linspace(0, len(v_gbm) - 1, min(8, len(v_gbm))).astype(int)
+    check = {"X": v_tab.iloc[pick].reset_index(drop=True), "p_gbm": v_gbm[pick]}
+    sha = file_sha256(checkpoint_path) if checkpoint_path else None
+    pkg = package(gbm, stack, thr, levels, horizon, sha, check, dropped)
     with open(out / "gbm6h.pkl", "wb") as f:
-        pickle.dump({"gbm": gbm, "stack": stack, "thresholds": thr, "horizon_min": horizon}, f)
+        pickle.dump(pkg, f)
     (out / "gbm6h_report.json").write_text(json.dumps(report, indent=2, default=float))
     (out / "gbm6h_report.md").write_text(render(report))
     return report

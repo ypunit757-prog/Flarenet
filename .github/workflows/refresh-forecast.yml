@@ -36,8 +36,12 @@ jobs:
       - name: Export forecast from live SWPC data
         if: steps.model.outputs.ok == 'true'
         run: |
+          # the tree-model blend is used only if its file is committed; export_web.py ignores it (and says why) when
+          # it was fitted with another network checkpoint or this machine's libraries give different numbers
+          STACK=""
+          if [ -f models/gbm6h_live.pkl ]; then STACK="--stack models/gbm6h_live.pkl"; fi
           python scripts/export_web.py -c configs/live_swpc.yaml --checkpoint models/flarenet.pt \
-            --source swpc_live --days 7 --out out/forecast.json
+            --source swpc_live --days 7 $STACK --out out/forecast.json
       - name: Publish to the data branch
         if: steps.model.outputs.ok == 'true'
         run: |

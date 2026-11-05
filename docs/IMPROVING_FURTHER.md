@@ -166,9 +166,51 @@ What this does and does not show:
 
 - It is one test period on one satellite. The gain on GOES-18 (+0.019 AUC) is larger than on the later GOES-16 period
   (+0.007, not established), so "about +0.01 to +0.02 AUC" is the honest range until more data says otherwise.
-- The tree model used 27-day rotation features and 168-hour windows. The live NOAA feed reaches back only 7 days, so a
-  live forecast cannot compute them. `--live-compatible` refits without them; the stack goes into the live forecast only
-  if the gain survives that.
+- The first run used 27-day rotation features and 168-hour windows, which the live NOAA feed (7 days of history) cannot
+  provide. The live-compatible refit below shows the gain survives without them.
 - GOES-18 has now been used for one adopt-or-reject decision. Each further candidate compared on it raises the chance
   that one looks better by luck. Data after the config's end date (2026-09-30) is untouched and is the cleanest final
   check; it will take months of activity to mean anything, as the Sun has been quiet.
+
+### Without the features a live forecast cannot compute (`--live-compatible`)
+
+Left out: the five 168-hour features and the three rotation features; 39 features used. Stack weights 0.24 on the
+network and 0.72 on the trees (75 % of the weight on the trees), fitted on 8,258 validation windows.
+
+| GOES-18 | network | tree model | stack | stack minus network (95 % interval) |
+|---|---|---|---|---|
+| AUC | 0.810 | 0.832 | 0.831 | +0.0216 (0.0113 to 0.0324) |
+| Brier | 0.0896 | 0.0880 | 0.0863 | -0.0033 (-0.0047 to -0.0020) |
+| TSS | 0.446 | 0.491 | 0.489 | +0.0430 (0.0160 to 0.0746) |
+| POD | 0.578 | 0.655 | 0.640 | +0.0620 (0.0328 to 0.0945) |
+| FAR | 0.603 | 0.627 | 0.611 | +0.0079 (-0.0119 to 0.0249), not established |
+
+The gain survived, and slightly grew: the rotation and 168-hour features contributed nothing (as for the daily model).
+On the later part of GOES-16 the stack's AUC is +0.0092 (0.0004 to 0.0186) and Brier -0.0049 (better), but TSS is
+-0.0494 (-0.0793 to -0.0209) and FAR +0.037 (worse): the threshold chosen on validation alerts more on that period, so
+threshold-based scores are mixed there while ranking and probabilities improve on both periods.
+
+## Putting the stack on the live forecast
+
+```bash
+uv run python scripts/gbm_6h.py -c configs/noaa_all_chrono.yaml --checkpoint models/flarenet.pt \
+    --live-compatible --install models/gbm6h_live.pkl
+git add models/gbm6h_live.pkl && git commit -am "6 h forecast: blend a tree model on 3 days of history" && git push
+```
+
+`--checkpoint models/flarenet.pt` matters: the stacking weights belong to one network, and the stack file records that
+file's SHA-256. The refresh workflow passes `--stack models/gbm6h_live.pkl` when the file exists and
+`scripts/export_web.py` uses it only if all of these hold, otherwise the page shows the network alone and says why
+(`model.stack.reason` in `forecast.json`, and a note on the Forecast page):
+
+- the file was fitted with exactly the checkpoint in use;
+- it uses no feature a 7-day feed cannot give (no `rot_*`, nothing over 72 hours);
+- eight stored feature rows give the same probabilities on the machine that runs it (a different scikit-learn can
+  change them);
+- the feature step runs without error.
+
+Forecast times with less than 72 hours of data behind them (the first three days of the 7-day live feed) use the
+network alone; `forecast.stack` marks which rows are blended. Retraining the network means re-running the command above,
+because the old stack file no longer matches.
+
+Check it after the next scheduled run (the `data` branch, `forecast.json`): `model.stack.used` should be `true`.

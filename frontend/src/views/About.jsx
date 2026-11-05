@@ -6,7 +6,7 @@ export default function About({ store }) {
     <div className="stack" style={{ maxWidth: 900 }}>
       <section className="card prose">
         <h2>What FlareNet does</h2>
-        <p>FlareNet reads the Sun's X-ray flux, one value per minute. The <b>nowcast</b> names the flare class happening right now. The <b>forecast</b> scores the chance of an M or X flare starting in the next six hours. Both come from one shared neural network.</p>
+        <p>FlareNet reads the Sun's X-ray flux, one value per minute. The <b>nowcast</b> names the flare class happening right now. The <b>forecast</b> scores the chance of an M or X flare starting in the next six hours. The nowcast and the network's share of the forecast come from one shared neural network.{D && D.model.stack && D.model.stack.used && <> The forecast score also blends in a gradient-boosted tree model that reads the last three days of X-ray history (how active the Sun has been, how long since the last M flare); the first three days of the chart have too little history behind them and use the network alone.</>}</p>
         <h2>Flare classes</h2>
         <div className="wrapx">
           <table>

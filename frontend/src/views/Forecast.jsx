@@ -141,8 +141,9 @@ export default function Forecast({ store }) {
         <div className="prose">
           <p><b>Risk</b> is a model score for an M or X flare starting in the next {Math.round(D.model.horizon_min / 60)} hours. At or above the <b>threshold</b> (dashed line) the page shows an alert. The threshold was chosen on validation data to maximise TSS.{" "}
             {D.model.calibrated
-              ? <>The score was calibrated on validation data (Platt scaling), so it is meant to track how often an M or X flare followed such a score; check the reliability plot in the run report before quoting it as a probability on a new period.</>
+              ? <>The score was calibrated on validation data (Platt scaling), so it is meant to track how often an M or X flare followed such a score; check the reliability plot in the run report before quoting it as a probability on a new period.{D.model.stack && D.model.stack.used && <> The score blends the neural network with a tree model on the last {D.model.stack.history_hours} hours of X-ray history (weights {D.model.stack.weights.network} and {D.model.stack.weights.tree_model} on the two log-odds). Forecasts earlier than {D.model.stack.history_hours} hours into the data, {D.model.stack.network_only_rows} of {D.model.stack.rows} here, use the network alone.</>}</>
               : <>The score is <b>not</b> a calibrated probability.</>}
+            {D.model.stack && D.model.stack.used === false && <> The tree-model blend is switched off ({D.model.stack.reason}); the network alone is shown.</>}
             {D.model.alert_levels && Object.keys(D.model.alert_levels).length > 1 && (
               <> Alert levels fixed on validation data: {Object.entries(D.model.alert_levels).map(([k, v]) => `${k} ${pct(v)}`).join(", ")}. A higher level means fewer false alarms and fewer flares warned.</>
             )}</p>
