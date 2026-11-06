@@ -214,3 +214,42 @@ network alone; `forecast.stack` marks which rows are blended. Retraining the net
 because the old stack file no longer matches.
 
 Check it after the next scheduled run (the `data` branch, `forecast.json`): `model.stack.used` should be `true`.
+
+## Which 6-hour model is best today
+
+All on GOES-18 (never trained on), 12,668 windows; every number is from your runs.
+
+| | first model (`goes_all`) | chronological network | network + tree model (live) |
+|---|---|---|---|
+| AUC | 0.808 | 0.810 | **0.831** |
+| TSS | 0.443 | 0.446 | **0.489** |
+| Brier (lower is better) | 0.2010 | 0.0896 | **0.0863** |
+| calibration error | 0.321 | **0.0097** | 0.0135 |
+| flares warned (window level) | **0.813** | 0.578 | 0.640 |
+| false alarms among alerts | 0.753 | **0.603** | 0.611 |
+
+The live model leads on ranking skill (AUC, TSS) and probability quality (Brier), and its AUC gain over the network
+alone has an interval that excludes zero (+0.022, 0.011 to 0.032). The first model's higher "flares warned" is only a
+lower alert threshold, paid for with 75 % false alarms; its TSS, which counts both, is the lowest. If you need to
+catch more flares at the cost of more false alarms, use the "sensitive" alert level, not the old model.
+
+## Trying to beat the live model: `scripts/challenger_6h.py`
+
+```bash
+uv run python scripts/challenger_6h.py -c configs/noaa_all_chrono.yaml --dry-run   # prints the plan
+uv run python scripts/challenger_6h.py -c configs/noaa_all_chrono.yaml
+```
+
+One command, unattended, many hours (it trains many networks): tune on validation only; train the winning settings
+once; train a five-network average (on the tuned settings if tuning found any); fit the tree model on each candidate;
+then compare each candidate's FINAL forecast (network + tree model) with the one running now on the same GOES-18
+windows. A candidate is recommended only if its AUC is better with an interval (corrected for the number of
+candidates) that excludes zero **and** its Brier score is not worse; otherwise the answer is "keep the live model".
+Nothing in `models/` is touched; when a candidate wins, the exact promotion commands are printed. It needs the live
+model's own run folder, `runs/goes_all_chrono_gbm_live` (made by `gbm_6h.py --live-compatible`). Finished runs are
+reused, `--steps stack,verdict` re-runs only the later stages, `--ensemble 0` skips the averaged candidate.
+
+How likely is a win? Unknown. The one big gain so far came from new information (three days of history), not from
+tuning; tuning and averaging typically move AUC by less, and a gain of about 0.01 is about what the paired test can just
+resolve. A "keep the live model" result is the expected, honest outcome if nothing helps. The route the literature
+suggests for a large further gain is a new input (SDO/HMI magnetograms), which is a separate data project.

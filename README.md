@@ -158,6 +158,7 @@ two runs on the satellite neither trained on. Why, how to run it and how to read
 Further, measured improvements for the 6-hour model (paired comparison with intervals, validation-only tuning,
 a five-network average, a tree model on long-memory features stacked with the network): [`docs/IMPROVING_FURTHER.md`](docs/IMPROVING_FURTHER.md).
 The tree-model blend (a measured +0.02 AUC on GOES-18) is used by the live forecast when `models/gbm6h_live.pkl` is committed; the same document says how.
+`scripts/challenger_6h.py` tries to beat the live 6-hour model unattended and recommends a replacement only on paired evidence.
 
 ## Daily forecast vs NOAA (same days)
 
@@ -252,7 +253,7 @@ src/flarenet/
   daily/           day-level forecaster vs NOAA: NOAA text parsers, features, model, walk-forward evaluation, live prediction
   orchestration/   workflows that compose the pipelines (train, evaluate, run, predict)
 configs/           default (improved), fast (original), NASA / cross-instrument / live examples, experiments/
-tests/             228 tests: sources, HTTP, labelers, features, split, metrics, config, end-to-end runs
+tests/             232 tests: sources, HTTP, labelers, features, split, metrics, config, end-to-end runs
 docs/              DAILY_VS_NOAA.md, FORWARD_TEST.md, ARCHITECTURE.md, IMPROVEMENTS.md, NASA_DATA.md, ADDING_A_SOURCE.md, APPLE_SILICON.md
 scripts/           daily_predict.py (tomorrow's forecast + forward log), daily_freeze.py, daily_forward_score.py, daily_consistency.py, headroom_check.py, case_study.py (historical flares), export_web.py (data for the frontend), example run scripts
 frontend/          React + Vite dashboard (deploy on Vercel)

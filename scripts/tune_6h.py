@@ -176,6 +176,9 @@ def search(
     best = int(full.index[0])
     write_report(out, cfg.run_name, table, best)
     path = write_best_config(base_raw, out, settings[best], f"{cfg.run_name}_tuned")
+    (out / "best_trial.json").write_text(
+        json.dumps({"trial": best, "overrides": settings[best]}, indent=2)
+    )
     return table, path
 
 
