@@ -147,8 +147,17 @@ def search(
     rows = pd.read_csv(csv).to_dict("records") if resume and csv.exists() else []
     done = {(int(r["trial"]), int(r["seed"])) for r in rows}
 
+    # The i-th sampled setting depends only on the search seed, so a resumed search may hold MORE trials than were asked
+    # for this time (an earlier, longer run): cover them all, and refuse rows made by a different search.
+    n_have = max([int(r["trial"]) for r in rows], default=0)
     rng = random.Random(search_seed)
-    settings = [{}] + [sample(rng, space or SPACE) for _ in range(trials)]
+    settings = [{}] + [sample(rng, space or SPACE) for _ in range(max(trials, n_have))]
+    for r in rows:
+        if json.loads(r["overrides"]) != settings[int(r["trial"])]:
+            raise ValueError(
+                f"{csv} was made by a different search (another --search-seed or settings space): trial "
+                f"{int(r['trial'])} does not match. Use another --out, or delete {out}."
+            )
 
     def go(trial: int, ov: dict, seed: int) -> None:
         if (trial, seed) in done:
@@ -161,7 +170,7 @@ def search(
             "  -> val AUC %.4f, Brier %.4f (%.1f min)", m["val_auc"], m["val_brier"], m["minutes"]
         )
 
-    for t, ov in enumerate(settings):
+    for t, ov in enumerate(settings[: trials + 1]):
         go(t, ov, cfg.seed)
     first = rank(pd.DataFrame(rows))
     # the baseline is always re-run with the extra seeds, so the winner is compared with it on equal terms

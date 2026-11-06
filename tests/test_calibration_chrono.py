@@ -265,3 +265,36 @@ def test_compare_runs_paired_flag_prints_the_paired_table_or_says_why_not(tmp_pa
     assert "skipped: missing" in capsys.readouterr().out
     assert main([str(a), str(b)]) == 0  # without the flag there is no paired section
     assert "minus" not in capsys.readouterr().out
+
+
+@pytest.mark.slow
+def test_tuner_resumes_a_longer_earlier_search_and_rejects_a_different_one(tmp_path):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from tune_6h import search
+
+    cfg = tiny_cfg(tmp_path, epochs=1)
+    cfg.data.split = "chrono"
+    cfg.data.train_frac, cfg.data.val_frac = 0.6, 0.2
+    cfg.sources[0].params = {"n_days": 120}
+    cfg.validate()
+    space = {"training.lr": [5e-4, 1e-3], "model.dropout": [0.2, 0.4]}
+    out = tmp_path / "tune"
+    search(cfg, {}, out, trials=3, confirm=0, confirm_seeds=0, space=space)
+    rows = pd.read_csv(out / "trials.csv")
+    rows.loc[rows["trial"] == 3, "val_auc"] = (
+        0.99  # the earlier, longer search found its best at trial 3
+    )
+    rows.to_csv(out / "trials.csv", index=False)
+    # asking for fewer trials than are stored used to fail with IndexError when trial 3 came up for confirmation
+    table, _ = search(cfg, {}, out, trials=1, confirm=1, confirm_seeds=1, resume=True, space=space)
+    assert 3 in set(table.index)
+    stored = pd.read_csv(out / "trials.csv")
+    assert set(stored["trial"]) == {0, 1, 2, 3} and (stored["trial"] == 3).sum() == 2
+
+    stored.loc[stored["trial"] == 2, "overrides"] = '{"training.lr": 123}'
+    stored.to_csv(out / "trials.csv", index=False)
+    with pytest.raises(ValueError, match="different search"):
+        search(cfg, {}, out, trials=3, confirm=0, resume=True, space=space)
