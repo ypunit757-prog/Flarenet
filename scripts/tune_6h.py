@@ -36,7 +36,7 @@ import pandas as pd
 import yaml
 
 from flarenet.core.config import apply_overrides, load_config
-from flarenet.core.utils import get_logger, resolve_device
+from flarenet.core.utils import get_logger, resolve_device, setup_logging
 from flarenet.orchestration import runner as orch
 from flarenet.pipelines.evaluation.metrics import best_threshold, safe_auc
 from flarenet.pipelines.evaluation.pipeline import align_channels
@@ -204,6 +204,9 @@ def main(argv=None) -> int:
     ap.add_argument("--search-seed", type=int, default=0)
     ap.add_argument("--resume", action="store_true", help="skip runs already in <out>/trials.csv")
     a = ap.parse_args(argv)
+    setup_logging(
+        "INFO"
+    )  # the scripts are not the CLI: without this the progress lines are never shown
 
     cfg = load_config(a.config)
     if cfg.data.split != "chrono":

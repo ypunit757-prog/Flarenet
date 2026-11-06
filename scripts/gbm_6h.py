@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 from flarenet.core.config import load_config
-from flarenet.core.utils import resolve_device
+from flarenet.core.utils import resolve_device, setup_logging
 from flarenet.gbm6h.pipeline import LIVE_COMPATIBLE_DROP, fit_and_evaluate
 from flarenet.orchestration import runner as orch
 from flarenet.pipelines.training.checkpoint import load_checkpoint
@@ -52,6 +52,9 @@ def main(argv=None) -> int:
     ap.add_argument("--bootstrap", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args(argv)
+    setup_logging(
+        "INFO"
+    )  # the scripts are not the CLI: without this the progress lines are never shown
 
     if a.install and not a.live_compatible:
         print(

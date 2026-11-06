@@ -94,3 +94,18 @@ def test_dry_run_prints_the_plan_and_changes_nothing(tmp_path, capsys):
         and "--live-compatible" in out
     )
     assert not list((tmp_path / "runs").glob("**/checkpoint.pt"))
+
+
+def test_long_running_scripts_switch_on_progress_logging(monkeypatch, tmp_path):
+    """Run outside the CLI they showed nothing for hours, which looks exactly like a hang."""
+    import gbm_6h
+    import pytest
+    import tune_6h
+
+    calls = []
+    monkeypatch.setattr(gbm_6h, "setup_logging", lambda level="INFO": calls.append("gbm"))
+    monkeypatch.setattr(tune_6h, "setup_logging", lambda level="INFO": calls.append("tune"))
+    assert gbm_6h.main(["-c", "x.yaml", "--install", str(tmp_path / "p.pkl")]) == 2
+    with pytest.raises(FileNotFoundError):
+        tune_6h.main(["-c", str(tmp_path / "missing.yaml")])
+    assert calls == ["gbm", "tune"]
