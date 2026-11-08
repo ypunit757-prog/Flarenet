@@ -22,6 +22,7 @@ Needs the live model's own run directory (default runs/<name>_gbm_live, made by 
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import subprocess
 import sys
@@ -106,7 +107,7 @@ def compare(
 
 
 def derive_config(src: dict, name: str, ensemble: int | None = None) -> dict:
-    raw = json.loads(json.dumps(src))  # deep copy of plain YAML data
+    raw = copy.deepcopy(src)  # YAML data holds dates (start: 2024-03-01), which JSON cannot copy
     raw["run_name"] = name
     raw.setdefault("training", {})["calibrate"] = "platt"
     if ensemble:
