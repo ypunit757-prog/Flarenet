@@ -17,8 +17,14 @@ export function summarize(D) {
   let since = null;
   if (F.alert[n]) { let k = n; while (k > 0 && F.alert[k - 1]) k--; since = F.t[k]; }
   const last = D.flares.filter((f) => isMX(f) && iso(f.peak) <= end).sort((a, b) => iso(b.peak) - iso(a.peak))[0];
+  const hoursOld = (Date.now() / 1000 - end) / 3600;
+  const alert = F.alert[n] === 1, thr = D.model.threshold, horizonH = D.model.horizon_min / 60;
+  // a forecast older than the time it looks ahead no longer covers "the next N hours", so it must not read as live
+  const expired = !D.demo && hoursOld > horizonH;
   return {
-    p: F.p[n], alert: F.alert[n] === 1, thr: D.model.threshold, end, cur: fl[i], gc: D.source.goes_calibrated,
+    state: D.demo ? "demo" : expired ? "expired" : alert ? "alert" : F.p[n] > 0.75 * thr ? "watch" : "quiet",
+    hoursOld, stale: !D.demo && hoursOld > 3, expired,
+    p: F.p[n], alert, thr: D.model.threshold, end, cur: fl[i], gc: D.source.goes_calibrated,
     curClass: classOf(fl[i]), pk, pkT, ev, by, inAlert, since, last, ft: F.t[n],
   };
 }

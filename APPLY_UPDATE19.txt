@@ -1,0 +1,9 @@
+FlareNet update 19 - new interface (frontend only)
+
+From the project folder:
+  unzip -o flarenet_update19.zip
+  git rm -q frontend/src/components/Gauge.jsx frontend/src/components/Kpis.jsx frontend/src/components/Banner.jsx frontend/src/components/Chip.jsx
+  cd frontend && npm install && npm test && npm run build && cd ..
+  git add -A && git commit -m "new interface" && git push
+
+Nothing outside frontend/ changes. The numbers on the Results page are untouched.

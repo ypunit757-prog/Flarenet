@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import Banner from "../components/Banner.jsx";
+import Note from "../components/Note.jsx";
 import Chart from "../components/Chart.jsx";
-import Chip from "../components/Chip.jsx";
+import ClassTag from "../components/ClassTag.jsx";
 import { classOf, iso } from "../lib/format.js";
 import { useTime } from "../lib/context.jsx";
 
@@ -51,44 +51,48 @@ export default function Analyze() {
   const dom = useMemo(() => (res?.D ? [res.D.series.t[0], res.D.series.t[res.D.series.t.length - 1]] : null), [res]);
 
   return (
-    <div className="stack" style={{ maxWidth: 920 }}>
-      <section className="card">
-        <div className="card-head">
-          <div>
-            <h2 className="card-title">Look at your own X-ray file</h2>
-            <p className="card-sub">Drop a CSV with a time column and the 0.1–0.8 nm flux in W/m². Everything runs in your browser and the file is not uploaded. This page lists the flares it finds; it does not run the FlareNet model. To forecast from a file, run <code>scripts/export_web.py</code> on it.</p>
-          </div>
-        </div>
-        <label className={`dropzone ${over ? "over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+    <div className="wrap">
+      <div className="head">
+        <h1 className="title">Look at your own X-ray file</h1>
+        <p className="lede">Drop a CSV with a time column and the 0.1 to 0.8 nm flux in W/m². It stays in your browser.</p>
+      </div>
+      <div className="page">
+        <Note>This page lists the M and X flares it finds with a plain threshold rule. It does not run the FlareNet model. To forecast from a file, run <code>scripts/export_web.py</code> on it.</Note>
+        <label className={`drop ${over ? "over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
           onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files[0]); }}>
-          <strong>Drop a CSV here or click to browse</strong>
-          <span className="muted">Up to 25 MB</span>
-          <input type="file" accept=".csv,text/csv,text/plain" hidden onChange={(e) => take(e.target.files[0])} />
+          <strong>Drop a CSV here, or click to choose one</strong>
+          <span className="muted">Up to 25 MB.</span>
+          <input type="file" accept=".csv,text/csv,text/plain" className="sr" onChange={(e) => take(e.target.files[0])} />
         </label>
-        {res?.error && <div style={{ marginTop: 16 }}><Banner kind="bad">{res.error}</Banner></div>}
+        {res?.error && <Note kind="bad"><b>That file could not be read.</b> {res.error}</Note>}
         {res?.D && (
-          <div style={{ marginTop: 16 }}>
-            <p><b>{res.rows.toLocaleString()}</b> rows · {fmtDT(dom[0])} to {fmtDT(dom[1])} · <b>{res.flares.length}</b> {res.flares.length === 1 ? "flare" : "flares"} of M class or above</p>
+          <section aria-label="Result">
+            <div className="sec-head">
+              <div>
+                <h2 className="h2">{res.flares.length} {res.flares.length === 1 ? "flare" : "flares"} of M class or above</h2>
+                <p className="sec-sub">{res.rows.toLocaleString()} rows, {fmtDT(dom[0])} to {fmtDT(dom[1])}. Drag across the chart to zoom.</p>
+              </div>
+              {zoom && <div className="range"><button className="reset" onClick={() => setZoom(null)}>Show full range</button></div>}
+            </div>
             <Chart D={res.D} dom={zoom || dom} flares={res.flares} onZoom={setZoom} />
             {res.flares.length > 0 && (
-              <div className="wrapx">
-                <table>
-                  <thead><tr><th>Peak</th><th>Class</th></tr></thead>
-                  <tbody>{res.flares.map((f) => <tr key={f.peak}><td className="mono">{fmtDT(iso(f.peak))}</td><td><Chip cls={f.class} /></td></tr>)}</tbody>
-                </table>
-              </div>
+              <ul className="log" style={{ marginTop: 24 }}>
+                {res.flares.map((f) => (
+                  <li key={f.peak}><div style={{ display: "flex", gap: 24, padding: "11px 0", alignItems: "center" }}><ClassTag cls={f.class} /><span className="when num">{fmtDT(iso(f.peak))}</span></div></li>
+                ))}
+              </ul>
             )}
-            <Banner>Assumes GOES-calibrated flux in W/m². For other instruments the class labels are not meaningful.</Banner>
-          </div>
+            <div style={{ marginTop: 24 }}><Note>Assumes GOES-calibrated flux in W/m². For other instruments the class labels are not meaningful.</Note></div>
+          </section>
         )}
-      </section>
-      <details className="card">
-        <summary>What format works?</summary>
-        <div className="prose">
-          <p>Any CSV with a header. Time as ISO text (UTC) or Unix seconds. Columns named <code>xrsb</code>, <code>flux</code> or <code>sxr</code> are picked up automatically.</p>
-          <pre style={{ background: "var(--s2)", padding: 10, borderRadius: 8, overflow: "auto", font: "12px var(--m)" }}>{`time_tag,xrsa,xrsb\n2026-10-10T00:00:00Z,1.2e-8,6.1e-7\n2026-10-10T00:01:00Z,1.2e-8,6.2e-7`}</pre>
-        </div>
-      </details>
+        <details className="more">
+          <summary>Which file format works?</summary>
+          <div className="prose">
+            <p>Any CSV with a header row. Time as ISO text in UTC, or as Unix seconds. Columns named <code>xrsb</code>, <code>flux</code> or <code>sxr</code> are picked up automatically.</p>
+            <pre className="sample">{`time_tag,xrsa,xrsb\n2026-10-10T00:00:00Z,1.2e-8,6.1e-7\n2026-10-10T00:01:00Z,1.2e-8,6.2e-7`}</pre>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }

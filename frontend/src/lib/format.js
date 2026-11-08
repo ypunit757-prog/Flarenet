@@ -17,3 +17,11 @@ export function dur(min) {
 
 export const pct = (p) => Math.round(p * 100) + "%";
 export const isMX = (f) => /^[MX]/.test(f.class);
+
+/** "1 h 40 min", "5 h", "3 days": how old data is, in words. */
+export function ago(hours) {
+  if (hours >= 48) return `${Math.round(hours / 24)} days`;
+  return dur(Math.max(1, Math.round(hours * 60)));
+}
+
+export const letterOf = (cls) => (/^[ABCMX]/.test(String(cls)) ? String(cls)[0] : "A");
