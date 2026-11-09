@@ -2,21 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Note from "../components/Note.jsx";
 import Chart from "../components/Chart.jsx";
 import ClassTag from "../components/ClassTag.jsx";
-import Facts from "../components/Facts.jsx";
-import Status from "../components/Status.jsx";
+import Readouts from "../components/Readouts.jsx";
+import Status, { Plain } from "../components/Status.jsx";
 import { ago, dur, iso, isMX, pct } from "../lib/format.js";
 import { summarize } from "../lib/summarize.js";
 import { useTime } from "../lib/context.jsx";
-
-function Plain({ word, say, children }) {
-  return (
-    <section className="band" data-state="wait">
-      <div className="wrap" style={{ gridTemplateColumns: "1fr" }}>
-        <div role="status"><p className="word">{word}</p><p className="say">{say}</p>{children}</div>
-      </div>
-    </section>
-  );
-}
 
 export default function Forecast({ store }) {
   const { data: D, loading, error, reload, src, setSrc, updated } = store;
@@ -49,7 +39,7 @@ export default function Forecast({ store }) {
       <><h1 className="sr">Forecast</h1>
         <Plain word="No data" say="The forecast could not be loaded.">
           {error?.message && <p className="fine">{String(error.message)}</p>}
-          <div className="btn-row"><button className="band-btn" onClick={reload}>Try again</button></div>
+          <div className="btn-row"><button className="btn" onClick={reload}>Try again</button></div>
         </Plain></>
     );
   }
@@ -73,79 +63,84 @@ export default function Forecast({ store }) {
       <h1 className="sr">Forecast</h1>
       <Status D={D} s={s} />
       <div className="wrap page">
-        <div className="notes" style={{ display: "grid", gap: 12 }}>
-          {D.demo && (
-            <Note kind="warn"><b>You are looking at demo data.</b> The flux is simulated and the forecast is a simple hand-written rule, not the FlareNet model. Set <code>VITE_API_URL</code> to your API, or put a <code>data.json</code> from <code>scripts/export_web.py</code> in <code>frontend/public/</code>, to see real model output.</Note>
-          )}
-          <Note>Research prototype, not an operational service. For official space weather alerts use <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA SWPC</a>.</Note>
-          <p className="dataline">
-            <span className="txt">
-              {D.demo ? "Simulated data" : <>Data from {D.source.name}</>}, ending {fmtDT(end)}{s.hoursOld >= 0 && !D.demo ? ` (${ago(s.hoursOld)} ago)` : ""}.
-              {updated && <> Loaded at {fmtClock(updated / 1000)}.</>}
-            </span>
+        {D.demo && (
+          <Note kind="warn"><b>You are looking at demo data.</b> The flux is simulated and the forecast is a simple hand-written rule, not the FlareNet model. Set <code>VITE_API_URL</code> to your API, or put a <code>data.json</code> from <code>scripts/export_web.py</code> in <code>frontend/public/</code>, to see real model output.</Note>
+        )}
+        <div className="databar">
+          <p>
+            {D.demo ? "Simulated data" : <>Data from {D.source.name}</>}, ending {fmtDT(end)}{s.hoursOld >= 0 && !D.demo ? ` (${ago(s.hoursOld)} ago)` : ""}.
+            {updated && <> Loaded at {fmtClock(updated / 1000)}.</>}
+          </p>
+          <p>
             <button className="link" onClick={reload}>Reload</button>
             <button className="link" onClick={() => setSrc(src === "demo" ? "latest" : "demo")}>{src === "demo" ? "Show the latest data" : "Show demo data"}</button>
           </p>
         </div>
 
-        <Facts s={s} />
+        <Note>Research prototype, not an operational service. For official space weather alerts use <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA SWPC</a>.</Note>
 
-        <section aria-labelledby="fx" ref={chartBox}>
-          <div className="sec-head">
-            <div>
-              <h2 id="fx">X-ray flux and flare score</h2>
-              <p className="sec-sub">{fmtDT(dom[0])} to {fmtDT(dom[1])}, {tz === "UTC" ? "UTC" : "local time"}. {zoom ? "Zoomed in." : "Drag across the chart to zoom."}</p>
+        <div className="deck" data-state={s.state}>
+          <div className="col">
+          <section className="panel p-chart" aria-labelledby="fx" ref={chartBox}>
+            <div className="sec-head">
+              <div>
+                <h2 id="fx">X-ray flux and flare score</h2>
+                <p className="sec-sub">{fmtDT(dom[0])} to {fmtDT(dom[1])}{tz === "UTC" ? "" : ", local time"}. {zoom ? "Zoomed in." : "Drag across the chart to zoom."}</p>
+              </div>
+              <div className="range" role="group" aria-label="Time range">
+                {avail.map((k) => (
+                  <button key={k} aria-pressed={!zoom && k === activeRange} onClick={() => { setRange(k); setZoom(null); setSelected(null); }}>{k === "all" ? "All" : k}</button>
+                ))}
+                {zoom && <button className="reset" onClick={() => { setZoom(null); setSelected(null); }}>Show full range</button>}
+              </div>
             </div>
-            <div className="range" role="group" aria-label="Time range">
-              {avail.map((k) => (
-                <button key={k} aria-pressed={!zoom && k === activeRange} onClick={() => { setRange(k); setZoom(null); setSelected(null); }}>{k === "all" ? "All" : k}</button>
-              ))}
-              {zoom && <button className="reset" onClick={() => { setZoom(null); setSelected(null); }}>Show full range</button>}
+            <Chart D={D} dom={dom} flares={mx} highlight={selected} onZoom={(z) => { setZoom(z); setSelected(null); }} nowLabel animate />
+            <div className="key">
+              <span><i className="solid" />Flare with an alert before it</span>
+              <span><i />Flare with no alert before it</span>
+              <span><i className="shade" />Model in alert</span>
             </div>
+          </section>
+          <section className="panel p-log" aria-labelledby="eh">
+            <div className="sec-head">
+              <div>
+                <h2 id="eh">Flares and what the model said first</h2>
+                <p className="sec-sub">Select a flare to zoom the chart to it. Warned means an alert was raised in the {h} hours before it started. The bar and number are the highest score in that time.</p>
+              </div>
+              <div className="range" role="group" aria-label="Flare classes to list">
+                <button aria-pressed={minCls === "M"} onClick={() => setMinCls("M")}>M and X</button>
+                <button aria-pressed={minCls === "X"} onClick={() => setMinCls("X")}>X only</button>
+              </div>
+            </div>
+            <p className="lead">
+              {rows.length
+                ? <><b>{warned} of {scored.length}</b> {minCls === "X" ? "X-class" : "M and X"} flares in view had an alert beforehand. The model was in alert for {Math.round(alertRate * 100)}% of all hours, so read the two numbers together: a model that is always in alert warns before every flare.</>
+                : <span className="empty">No flares of this class in view. Widen the time range above.</span>}
+            </p>
+            {rows.length > 0 && (
+              <ul className="log">
+                <li className="log-head" aria-hidden="true"><span>Class</span><span>Peak</span><span>What the model said first</span><span>Highest score</span></li>
+                {rows.map((f) => (
+                  <li key={f.peak}>
+                    <button type="button" aria-pressed={selected === f.peak} onClick={() => pick(f)}>
+                      <ClassTag cls={f.class} />
+                      <span className="when num">{fmtDT(iso(f.peak))}</span>
+                      <span className={`out ${f.forecast === "WARNED" ? "hit" : f.forecast === "MISSED" ? "miss" : "none"}`}>
+                        {f.forecast === "WARNED" ? `Warned ${dur(f.lead_min)} ahead` : f.forecast === "MISSED" ? "Missed: no alert before it" : "No forecast before it"}
+                        {f.forecast === "WARNED" && f.lead_min != null && <span className="lead-bar" aria-hidden="true"><b style={{ width: `${Math.min(100, (f.lead_min / D.model.horizon_min) * 100)}%` }} /></span>}
+                      </span>
+                      <span className="sc num" aria-label={f.max_prob == null ? "no score" : `highest score ${pct(f.max_prob)}`}>
+                        {f.max_prob == null ? "–" : <><i aria-hidden="true"><b style={{ width: `${f.max_prob * 100}%` }} /></i>{pct(f.max_prob)}</>}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
           </div>
-          <Chart D={D} dom={dom} flares={mx} highlight={selected} onZoom={(z) => { setZoom(z); setSelected(null); }} nowLabel animate />
-          <div className="key">
-            <span><i className="solid" />Flare with an alert before it</span>
-            <span><i />Flare with no alert before it</span>
-            <span><i className="shade" />Model in alert</span>
-          </div>
-        </section>
-
-        <section aria-labelledby="eh">
-          <div className="sec-head">
-            <div>
-              <h2 id="eh">Flares and what the model said first</h2>
-              <p className="sec-sub">Select a flare to zoom the chart to it. Warned means an alert was raised in the {h} hours before it started. The bar and number are the highest score in that time.</p>
-            </div>
-            <div className="range" role="group" aria-label="Flare classes to list">
-              <button aria-pressed={minCls === "M"} onClick={() => setMinCls("M")}>M and X</button>
-              <button aria-pressed={minCls === "X"} onClick={() => setMinCls("X")}>X only</button>
-            </div>
-          </div>
-          <p className="lead">
-            {rows.length
-              ? <><b>{warned} of {scored.length}</b> {minCls === "X" ? "X-class" : "M and X"} flares in view had an alert beforehand. The model was in alert for {Math.round(alertRate * 100)}% of all hours, so read the two numbers together: a model that is always in alert warns before every flare.</>
-              : <span className="empty">No flares of this class in view. Widen the time range above.</span>}
-          </p>
-          {rows.length > 0 && (
-            <ul className="log">
-              {rows.map((f) => (
-                <li key={f.peak}>
-                  <button type="button" aria-pressed={selected === f.peak} onClick={() => pick(f)}>
-                    <ClassTag cls={f.class} />
-                    <span className="when num">{fmtDT(iso(f.peak))}</span>
-                    <span className={`out ${f.forecast === "WARNED" ? "hit" : f.forecast === "MISSED" ? "miss" : "none"}`}>
-                      {f.forecast === "WARNED" ? `Warned ${dur(f.lead_min)} ahead` : f.forecast === "MISSED" ? "Missed: no alert before it" : "No forecast before it"}
-                    </span>
-                    <span className="sc num" aria-label={f.max_prob == null ? "no score" : `highest score ${pct(f.max_prob)}`}>
-                      {f.max_prob == null ? "–" : <><i aria-hidden="true"><b style={{ width: `${f.max_prob * 100}%` }} /></i>{pct(f.max_prob)}</>}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+          <Readouts D={D} s={s} />
+        </div>
 
         <details className="more">
           <summary>How to read this page</summary>

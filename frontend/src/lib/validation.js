@@ -1,7 +1,6 @@
 // Measured results from this project. Edit these when you re-run an evaluation.
 // 6-hour model: the network in models/flarenet.pt (run goes_all_chrono: trained on GOES-16, tested on GOES-18) blended with
 // the tree model in models/gbm6h_live.pkl (scripts/gbm_6h.py --live-compatible; numbers from its report, docs/IMPROVING_FURTHER.md).
-// Daily model: docs/DAILY_VS_NOAA.md, "First real run".
 export const VALIDATION = [
   {
     key: "fc", title: "6-hour forecast (neural network + tree model)", where: "GOES-18, April 2025 onward, never seen in training (GOES-16 only). 12,668 forecast times, 1,646 of them followed by an M/X flare within 6 h.",
@@ -13,15 +12,6 @@ export const VALIDATION = [
       "Probabilities stay calibrated: on GOES-18 the calibration error is 0.014 and the Brier score 0.086 (the first model: 0.32 and 0.201).",
       "The tree model reads the last three days of X-ray history, so the first three days of the 7-day live chart use the network alone. Flares warned in time and the median warning time (network alone: 309 of 393 flares, 5 h 25 min) have not been re-measured for the blend.",
       "Not re-run for this model: the chance test (alerts moved to random times) and the precision against the base rate.",
-    ],
-  },
-  {
-    key: "daily", title: "Daily forecast against NOAA (separate daily model)", where: "2019-03 to 2026-09: 2,740 days with both forecasts, 725 with an M flare. A model trained only on earlier days predicts each day; NOAA's own 22:00 UTC forecast is the comparison.", tag: ["level with NOAA, ahead in 2025-26", "warn"],
-    table: { head: ["FlareNet minus NOAA", "AUC (higher is better)", "Brier (lower is better)"], rows: [["All days", "+0.016 (+0.006 to +0.026)", "-0.008 (-0.014 to -0.003)"], ["2019-2024", "+0.001 (-0.008 to +0.010)", "0.000 (-0.005 to +0.005)"], ["2025-2026", "+0.066 (+0.039 to +0.096)", "-0.037 (-0.050 to -0.024)"]] },
-    list: [
-      "Brackets are 95% intervals. Brier is against NOAA recalibrated on earlier days, the stronger baseline.",
-      "Through 2024 the two were level. The pooled advantage comes from 2025-26, and inside each year it is not established (AUC +0.010, -0.013 to +0.031).",
-      "Not shown to be better than NOAA. A live forward test, in which every forecast is logged before its day starts, is running and decides it.",
     ],
   },
   {
@@ -43,7 +33,6 @@ export const CHECKS = [
   ["ok", "Real forecast skill on unseen GOES-18 data", "AUC 0.83, TSS 0.49; 64% of pre-flare forecast times alerted, 61% of alerts false. The neural network alone: AUC 0.81, TSS 0.45. The AUC gain is +0.022 (+0.011 to +0.032) on GOES-18 but only +0.009 on a later GOES-16 period"],
   ["ok", "Works across GOES satellites", "Trained on GOES-16, tested on GOES-18"],
   ["ok", "Calibrated probabilities", "On GOES-18: calibration error 0.014, Brier 0.086. Calibrated on 2023-24, tested on 2025-26 and a different satellite"],
-  ["warn", "Better than NOAA", "Not shown. The 6-hour model is not comparable to NOAA's daily forecast; a separate daily model is level with NOAA through 2024 and ahead in 2025-26. The forward test decides"],
   ["bad", "X-class nowcast", "Not detected. 0 of 13 labelled X"],
   ["warn", "Aditya-L1 and other agencies", "Not tested yet"],
 ];

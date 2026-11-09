@@ -16,11 +16,18 @@ const ROUTES = [
 ];
 const STATE_WORD = { alert: "Alert", watch: "Watch", quiet: "Quiet", demo: "Demo", expired: "Out of date" };
 
+/** UTC time to the second, as on a ground-station display. Not announced to screen readers. */
+function Clock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const id = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(id); }, []);
+  return <span className="clock num" aria-hidden="true"><span>UTC</span> {now.toISOString().slice(11, 19)}</span>;
+}
+
 function Shell() {
   const toast = useToast();
   const { tz, setTz } = useTime();
   const { pathname } = useLocation();
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || "light");
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || "dark");
   const onFallback = useCallback(() => toast("Could not reach the forecast data, so the demo is shown."), [toast]);
   const store = useForecastData(onFallback);
   const route = ROUTES.find((r) => r.path === pathname) || ROUTES[0];
@@ -57,6 +64,7 @@ function Shell() {
             {ROUTES.map((r) => <NavLink key={r.path} to={r.path} end>{r.title}</NavLink>)}
           </nav>
           <div className="tools">
+            <Clock />
             <button className="tool" onClick={() => setTz(tz === "UTC" ? "local" : "UTC")} title="Switch between UTC and your local time" aria-label={`Times are in ${tz === "UTC" ? "UTC" : "your local time"}. Switch.`}>{tz === "UTC" ? "UTC" : "Local time"}</button>
             <button className="tool" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Light or dark theme (T)" aria-label={`Switch to the ${theme === "dark" ? "light" : "dark"} theme`}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none" /></svg>

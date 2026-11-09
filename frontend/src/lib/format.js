@@ -25,3 +25,6 @@ export function ago(hours) {
 }
 
 export const letterOf = (cls) => (/^[ABCMX]/.test(String(cls)) ? String(cls)[0] : "A");
+
+/** Where a flux sits on the A to X gauge: 0 at 1e-8 W/m² (bottom) to 1 at 1e-3 (top), log scale. Each class is a fifth. */
+export const ladderPos = (f) => (!isFinite(f) || f <= 0 ? 0 : Math.min(1, Math.max(0, (Math.log10(f) + 8) / 5)));

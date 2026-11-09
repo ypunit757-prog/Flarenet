@@ -66,7 +66,7 @@ export default function Analyze() {
         </label>
         {res?.error && <Note kind="bad"><b>That file could not be read.</b> {res.error}</Note>}
         {res?.D && (
-          <section aria-label="Result">
+          <section className="panel" aria-label="Result">
             <div className="sec-head">
               <div>
                 <h2 className="h2">{res.flares.length} {res.flares.length === 1 ? "flare" : "flares"} of M class or above</h2>

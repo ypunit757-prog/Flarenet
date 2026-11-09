@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { classOf, dur, pct, ago, letterOf, isMX } from "../src/lib/format.js";
+import { classOf, dur, pct, ago, letterOf, isMX, ladderPos } from "../src/lib/format.js";
+import { CHECKS, VALIDATION } from "../src/lib/validation.js";
 import { summarize } from "../src/lib/summarize.js";
 
 const END = "2026-11-08T01:07:00Z";
@@ -96,4 +97,22 @@ test("counts M and X flares in the last 24 hours before the data ends", () => {
   assert.equal(s.ev.length, 1);
   assert.equal(s.by.M, 1);
   assert.equal(s.by.X, 0);
+});
+
+test("the class gauge is a log scale with one fifth per class", () => {
+  assert.equal(ladderPos(1e-8), 0);
+  assert.ok(Math.abs(ladderPos(1e-7) - 0.2) < 1e-9);
+  assert.ok(Math.abs(ladderPos(1e-6) - 0.4) < 1e-9);
+  assert.ok(Math.abs(ladderPos(1e-5) - 0.6) < 1e-9);
+  assert.ok(Math.abs(ladderPos(1e-4) - 0.8) < 1e-9);
+  assert.equal(ladderPos(1e-3), 1);
+  assert.equal(ladderPos(5), 1, "clamped at the top");
+  assert.equal(ladderPos(0), 0);
+  assert.equal(ladderPos(NaN), 0);
+});
+
+test("the results page makes no claim of being better than NOAA", () => {
+  const text = JSON.stringify([CHECKS, VALIDATION]);
+  assert.ok(!/better than noaa|against noaa|minus noaa|ahead of noaa|level with noaa/i.test(text));
+  assert.ok(!VALIDATION.some((v) => v.key === "daily"));
 });

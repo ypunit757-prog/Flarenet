@@ -1,16 +1,17 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#080b0f" />
     <meta name="description" content="Solar flare nowcast and 6-hour M/X forecast from X-ray flux." />
     <title>FlareNet</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <script>
       // apply the saved theme before first paint to avoid a flash
       try {
-        var t = localStorage.getItem("flarenet-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        var t = localStorage.getItem("flarenet-theme") || "dark";
         document.documentElement.dataset.theme = t;
       } catch (e) {}
     </script>

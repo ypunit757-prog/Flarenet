@@ -179,10 +179,11 @@ export default function Chart({ D, dom, flares, highlight, onZoom, nowLabel = fa
         {g.rows.map((r, i) => (
           <g key={i}><line className={`g ${r.cut ? "cut" : ""}`} x1={mL} x2={W - mR} y1={r.y} y2={r.y} /><text x={mL - 8} y={r.y + 4} textAnchor="end">{r.label}</text></g>
         ))}
-        {g.letters.map((l) => <text key={l.L} className="cls" x={10} y={l.y} fill={TEXT[l.L]} style={{ fill: TEXT[l.L] }}>{l.L}</text>)}
+        {g.letters.map((l) => <text key={l.L} className="cls-l" x={10} y={l.y} fill={TEXT[l.L]} style={{ fill: TEXT[l.L] }}>{l.L}</text>)}
         {g.ticks.map((t, i) => (
           <g key={i}><line className="g" x1={t.x} x2={t.x} y1={mT} y2={mT + panelH} opacity=".55" /><text x={t.x > W - 30 ? W - 2 : t.x} y={Ht - 10} textAnchor={t.x > W - 30 ? "end" : "middle"}>{t.label}</text></g>
         ))}
+        <path className="trace glow" d={g.flux} stroke={stroke} clipPath={`url(#${gid}c)`} />
         <path className={`trace ${drawn ? "" : "draw"}`} d={g.flux} pathLength="1" stroke={stroke} clipPath={`url(#${gid}c)`} />
         {F && <>
           <line className="g" x1={mL} x2={W - mR} y1={g.yP(0)} y2={g.yP(0)} /><line className="g" x1={mL} x2={W - mR} y1={g.yP(1)} y2={g.yP(1)} />
@@ -191,22 +192,23 @@ export default function Chart({ D, dom, flares, highlight, onZoom, nowLabel = fa
           <line className="thr" x1={mL} x2={W - mR} y1={g.yP(thr)} y2={g.yP(thr)} />
           {side
             ? <text className="thr-tag" x={W - mR + 12} y={g.yP(thr) - 2}>alert line<tspan x={W - mR + 12} dy="14">{pct(thr)}</tspan></text>
-            : <text className="thr-tag" x={mL + 6} y={g.yP(thr) - 6} style={{ paintOrder: "stroke", stroke: "var(--paper)", strokeWidth: 4 }}>alert line {pct(thr)}</text>}
-          <text x={mL + 6} y={p0 + 15} style={{ paintOrder: "stroke", stroke: "var(--paper)", strokeWidth: 4 }}>Chance of an M or X flare within {Math.round(D.model.horizon_min / 60)} h</text>
+            : <text className="thr-tag" x={mL + 6} y={g.yP(thr) - 6} style={{ paintOrder: "stroke", stroke: "var(--halo)", strokeWidth: 4 }}>alert line {pct(thr)}</text>}
+          <text x={mL + 6} y={p0 + 15} style={{ paintOrder: "stroke", stroke: "var(--halo)", strokeWidth: 4 }}>Chance of an M or X flare within {Math.round(D.model.horizon_min / 60)} h</text>
         </>}
-        <text x={mL + 6} y={mT + 15} style={{ paintOrder: "stroke", stroke: "var(--paper)", strokeWidth: 4 }}>X-ray flux, W/m²</text>
+        <text x={mL + 6} y={mT + 15} style={{ paintOrder: "stroke", stroke: "var(--halo)", strokeWidth: 4 }}>X-ray flux, W/m²</text>
         {g.marks.map(({ f, cx, cy, label }) => {
           const col = f.class[0] === "X" ? "var(--c-X)" : "var(--c-M)", warned = f.forecast === "WARNED";
           return (
             <g key={f.peak}>
-              {warned ? <circle cx={cx} cy={cy} r="5.5" fill="var(--ink)" stroke="var(--paper)" strokeWidth="1.5" /> : <circle cx={cx} cy={cy} r="5.5" fill="var(--paper)" stroke="var(--ink)" strokeWidth="2" />}
+              {warned ? <circle cx={cx} cy={cy} r="5.5" fill="var(--ink)" stroke="var(--halo)" strokeWidth="1.5" /> : <circle cx={cx} cy={cy} r="5.5" fill="var(--panel)" stroke="var(--ink)" strokeWidth="2" />}
               <circle cx={cx} cy={cy} r="1.8" fill={col} />
-              {label && <text className="flag" x={cx} y={Math.max(mT + 30, cy - 10)} textAnchor="middle" style={{ fill: f.class[0] === "X" ? "var(--t-X)" : "var(--t-M)", paintOrder: "stroke", stroke: "var(--paper)", strokeWidth: 4 }}>{f.class}</text>}
+              {label && <text className="flag" x={cx} y={Math.max(mT + 30, cy - 10)} textAnchor="middle" style={{ fill: f.class[0] === "X" ? "var(--t-X)" : "var(--t-M)", paintOrder: "stroke", stroke: "var(--halo)", strokeWidth: 4 }}>{f.class}</text>}
               {highlight === f.peak && <circle className="ring" cx={cx} cy={cy} r="12" />}
             </g>
           );
         })}
         {g.now && <g>
+          <circle className="now-ring" cx={g.now.cx} cy={g.now.cy} r="5" />
           <circle className="now-dot" cx={g.now.cx} cy={g.now.cy} r="3.5" />
           {side
             ? <><line x1={g.now.cx + 4} x2={W - mR + 8} y1={g.now.cy} y2={g.now.cy} stroke="var(--ink)" strokeWidth="1" /><text className="now-tag" x={W - mR + 12} y={g.now.cy + 4.5}>{g.now.text}</text></>
