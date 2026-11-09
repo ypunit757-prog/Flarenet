@@ -83,7 +83,7 @@ function Shell() {
       </main>
       <footer className="foot">
         <div className="wrap">
-          <p>FlareNet is a research prototype built for the Bharatiya Antariksh Hackathon 2026. For official space weather alerts use <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA SWPC</a>. <a href="https://github.com/ypunit757-prog/Flarenet" target="_blank" rel="noopener noreferrer">Source code on GitHub</a>.</p>
+          <p>FlareNet is a research prototype. For official space weather alerts use <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA SWPC</a>. <a href="https://github.com/ypunit757-prog/Flarenet" target="_blank" rel="noopener noreferrer">Source code on GitHub</a>.</p>
         </div>
       </footer>
     </>
