@@ -1,0 +1,20 @@
+sequenceDiagram
+  autonumber
+  participant GH as GitHub Actions
+  participant SW as NOAA SWPC
+  participant D as data branch
+  participant API as FastAPI
+  participant W as Browser
+  participant M as Mail server
+  GH->>SW: fetch last 7 days of X-ray flux
+  GH->>GH: window, forecast, explain
+  GH->>D: read alert_state.json
+  GH->>GH: decide alerts (stale data refused, one per episode)
+  GH->>D: push forecast.json, alerts.json, alert_state.json
+  GH->>M: send e-mail (only after the push)
+  W->>API: GET /api/forecast
+  API->>D: fetch (cached, last good copy kept)
+  API-->>W: validated payload
+  W->>API: GET /api/alerts
+  API-->>W: events from SQLite
+  W->>W: every 10 min: reload, apply alert rules, notify if tab open

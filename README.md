@@ -2,10 +2,25 @@
 
 Solar-flare **nowcasting** (class of the current minute) and **6-hour M/X forecasting** from X-ray
 lightcurves. One codebase, any instrument: India's **Aditya-L1** (SoLEXS + HEL1OS), **NASA/NOAA GOES**
-(archive files, live feed, your own CSV/NetCDF/JSON) and a synthetic generator. Built for BAH2026
-Problem Statement 15 as a pipeline-based Python package with a CLI, YAML configs and tests.
+(archive files, live feed, your own CSV/NetCDF/JSON) and a synthetic generator. A pipeline-based Python package with a
+CLI, YAML configs and tests, plus a web dashboard, an API and alerting.
 
 ![dashboard](docs/dashboard_synthetic.png)
+
+## At a glance
+
+| | |
+|---|---|
+| **6-hour forecast** | calibrated probability of an M/X flare in the next 6 hours: CNN-BiLSTM network blended with a tree model, refreshed every 30 minutes from the live NOAA SWPC feed |
+| **Dashboard** | Forecast, History, Alerts, Explain, Results, Data, Analyze, About (`frontend/`) |
+| **Explainable AI** | exact Shapley values by input group for each forecast, and global importance (`src/flarenet/explain/`) |
+| **Alerts** | three sensitivity levels, one alert per episode, cool-down, no alert from stale or simulated data, forecast and observed flares kept apart; browser notifications and e-mail (`src/flarenet/alerts/`) |
+| **Model comparison** | CNN-BiLSTM vs LSTM, Random Forest and XGBoost on identical windows (`scripts/compare_models.py`) |
+| **API** | FastAPI with validation, error handling, admin key, SQLite alert store, cache, background refresh, Docker (`backend/`) |
+| **Documents** | [`docs/PROJECT_REPORT.md`](docs/PROJECT_REPORT.md) (college report with diagrams), [`docs/PRESENTATION.md`](docs/PRESENTATION.md), [`docs/DEPLOY.md`](docs/DEPLOY.md) |
+
+What has and has not been shown is on the dashboard's Results page. In short: real forecast skill on a different satellite, not
+shown to beat NOAA, no X-class detection in the nowcast, Aditya-L1 untested.
 
 ## The pipelines
 
@@ -177,7 +192,19 @@ uv run flarenet daily -c configs/daily_noaa.yaml
 
 ## Results
 
-All numbers are on **synthetic data** (200 days, held-out 3-day blocks), CPU. Full report of the seed-42 run:
+### Real data (GOES), the deployed 6-hour model
+
+Trained on GOES-16, calibrated on a later year, tested on GOES-18 from April 2025 (12,668 forecast times, 1,646 followed by an M/X
+flare within 6 hours): ROC-AUC 0.83, TSS 0.49; 64% of the times before an M/X flare were alerted at the default level and 61% of
+alerts were false alarms; calibration error 0.014, Brier score 0.086. The neural network alone: AUC 0.81, TSS 0.45. Not shown to beat
+NOAA; the nowcast did not detect X-class flares (0 of 13). Details, intervals and caveats: the dashboard's Results page
+(`frontend/src/lib/validation.js`), [`docs/CHRONO_CALIBRATION.md`](docs/CHRONO_CALIBRATION.md),
+[`docs/IMPROVING_FURTHER.md`](docs/IMPROVING_FURTHER.md), [`docs/DAILY_VS_NOAA.md`](docs/DAILY_VS_NOAA.md). The model comparison
+(`scripts/compare_models.py`) and explanation (`scripts/explain_model.py`) are run on your own computer and are not in the repository until you add them.
+
+### Synthetic data
+
+The numbers below are on **synthetic data** (200 days, held-out 3-day blocks), CPU. Full report of the seed-42 run:
 [`docs/example_metrics_report.json`](docs/example_metrics_report.json); brackets are 95 % block-bootstrap intervals.
 
 | Metric (seed 42) | original (`fast.yaml`) | improved (`default.yaml`) |
@@ -197,42 +224,9 @@ M-class recall from 0.575 to 0.767, while the **forecast does not change** (TSS 
 tree matches the network on the forecast, so on synthetic data the forecast is limited by the data, not
 the model. Everything that was tried, with results: [`docs/IMPROVEMENTS.md`](docs/IMPROVEMENTS.md).
 
-**No real NASA/GOES or Aditya-L1 results are included in this repository.** The NASA servers could not
-be reached from the environment this was built in, so the NASA code is tested against locally
-generated files in the real GOES-R NetCDF, SWPC JSON and DONKI formats and against a local HTTP server
-(see Testing), but has not yet run against the live NOAA/NASA endpoints. Run
-`configs/nasa_goes_ncei.yaml` and `configs/cross_instrument.yaml`, then quote the numbers from
-`report.md`, which prints the caveats that apply.
-
-## Frontend, API and deployment
-
-- `frontend/`: React + Vite dashboard (plain JavaScript). Deploy on **Vercel**.
-- `backend/`: FastAPI service that serves the forecast JSON. Deploy on **Render**.
-- `.github/workflows/refresh-forecast.yml`: every 30 minutes runs the model on live NOAA SWPC data and publishes the result.
-
-Run locally:
-
-```bash
-# API
-cd backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements-dev.txt
-uvicorn app.main:app --reload --port 8000
-
-# Frontend (second terminal)
-cd frontend && npm install
-echo "VITE_API_URL=http://localhost:8000" > .env.local
-npm run dev                       # http://localhost:5173
-```
-
-Show real model output without the API (run from the project root):
-
-```bash
-uv run python scripts/export_web.py -c configs/nasa_goes_ncei.yaml \
-  --checkpoint runs/goes_recent/checkpoint.pt --source goes_recent --days 14 \
-  --metrics runs/goes_recent/metrics_report.json --out frontend/public/data.json
-```
-
-Without data the frontend shows a labelled demo. Step-by-step deployment (GitHub, Render, Vercel): `docs/DEPLOY.md`.
-The measured numbers on the Results page are in `frontend/src/lib/validation.js`.
+**Aditya-L1 results are not included**: support exists (`configs/aditya_eval.yaml`) but it has not been tested on real data.
+The NASA/NOAA readers are also tested against locally generated files in the real GOES-R NetCDF, SWPC JSON and DONKI formats and a
+local HTTP server (see Testing).
 
 ## Project layout
 
@@ -251,13 +245,17 @@ src/flarenet/
   models/          FlareNet, ensemble wrapper, losses
   experiment.py    multi-seed experiment runner (`flarenet experiment`)
   daily/           day-level forecaster vs NOAA: NOAA text parsers, features, model, walk-forward evaluation, live prediction
+  gbm6h/           tree model for the 6-hour forecast, its blend with the network, and the live version of it
+  compare/         model comparison: LSTM, Random Forest, XGBoost, full metrics, ROC/PR curves, paired block bootstrap
+  explain/         Shapley values by input group (per forecast), global importance, optional SHAP
+  alerts/          alert rules (stale-data refusal, one per episode, cool-down) and e-mail
   orchestration/   workflows that compose the pipelines (train, evaluate, run, predict)
 configs/           default (improved), fast (original), NASA / cross-instrument / live examples, experiments/
-tests/             236 tests: sources, HTTP, labelers, features, split, metrics, config, end-to-end runs
-docs/              DAILY_VS_NOAA.md, FORWARD_TEST.md, ARCHITECTURE.md, IMPROVEMENTS.md, NASA_DATA.md, ADDING_A_SOURCE.md, APPLE_SILICON.md
+tests/             283 tests: sources, HTTP, labelers, features, split, metrics, config, comparison, explanation, alerts, end-to-end runs
+docs/              PROJECT_REPORT.md, PRESENTATION.md, DEPLOY.md, diagrams/, DAILY_VS_NOAA.md, FORWARD_TEST.md, ARCHITECTURE.md, IMPROVEMENTS.md, NASA_DATA.md, ADDING_A_SOURCE.md, APPLE_SILICON.md
 scripts/           daily_predict.py (tomorrow's forecast + forward log), daily_freeze.py, daily_forward_score.py, daily_consistency.py, headroom_check.py, case_study.py (historical flares), export_web.py (data for the frontend), example run scripts
 frontend/          React + Vite dashboard (deploy on Vercel)
-backend/           FastAPI service serving the forecast JSON (deploy on Render)
+backend/           FastAPI service: forecast, alert history, forward test, admin endpoints, SQLite store (Render or Docker)
 models/            put the deployed checkpoint here as flarenet.pt
 render.yaml        Render blueprint for the API
 notebooks/         the original v5.1 research notebook, kept for reference
@@ -265,7 +263,7 @@ notebooks/         the original v5.1 research notebook, kept for reference
 
 ## Testing
 
-`pytest` runs 136 tests in about 35 seconds on CPU, with no internet access. NetCDF, SWPC and DONKI
+`pytest` runs 283 tests in about 6 minutes on CPU, with no internet access (`pytest -m "not slow"` is much faster). The API has its own 33 tests (`cd backend && python -m pytest tests`) and the dashboard 40 (`cd frontend && npm test`); CI runs all three. NetCDF, SWPC and DONKI
 payloads are generated locally in the real file layouts; the NCEI directory listing, download,
 retry and DONKI query code talks to a throw-away local HTTP server. End-to-end tests train tiny
 models: synthetic run, GOES-format files as training data with fake Aditya-L1 FITS as the eval
@@ -300,7 +298,7 @@ make install    # editable install with dev tools
 make lint       # ruff check + format check
 make test       # pytest
 make run        # default synthetic pipeline
-make docker     # CPU image
+make docker     # CPU image of the pipeline
 ```
 
 ## License

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { TimeProvider, ToastProvider, useTime, useToast } from "./lib/context.jsx";
 import { useForecastData } from "./lib/useForecastData.js";
@@ -7,13 +7,23 @@ import Forecast from "./views/Forecast.jsx";
 import Results from "./views/Results.jsx";
 import Analyze from "./views/Analyze.jsx";
 import About from "./views/About.jsx";
+import Alerts from "./views/Alerts.jsx";
+import Explain from "./views/Explain.jsx";
+import History from "./views/History.jsx";
+import Dataset from "./views/Dataset.jsx";
+import { useBrowserAlerts } from "./lib/useBrowserAlerts.js";
 
 const ROUTES = [
   { path: "/", title: "Forecast" },
+  { path: "/history", title: "History" },
+  { path: "/alerts", title: "Alerts" },
+  { path: "/explain", title: "Explain" },
   { path: "/results", title: "Results" },
+  { path: "/dataset", title: "Data" },
   { path: "/analyze", title: "Analyze" },
   { path: "/about", title: "About" },
 ];
+export const REFRESH_MS = 10 * 60 * 1000;
 const STATE_WORD = { alert: "Alert", watch: "Watch", quiet: "Quiet", demo: "Demo", expired: "Out of date" };
 
 /** UTC time to the second, as on a ground-station display. Not announced to screen readers. */
@@ -30,6 +40,15 @@ function Shell() {
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || "dark");
   const onFallback = useCallback(() => toast("Could not reach the forecast data, so the demo is shown."), [toast]);
   const store = useForecastData(onFallback);
+  const alerts = useBrowserAlerts(store.data, toast);
+  // fetch a new forecast every 10 minutes (a new one is published every 30), so alerts and the page stay current
+  const refreshRef = useRef(store.refresh);
+  refreshRef.current = store.refresh;
+  useEffect(() => {
+    if (store.src !== "latest") return undefined;
+    const id = setInterval(() => { if (document.visibilityState === "visible" || alerts.settings.enabled) refreshRef.current(); }, REFRESH_MS);
+    return () => clearInterval(id);
+  }, [store.src, alerts.settings.enabled]);
   const route = ROUTES.find((r) => r.path === pathname) || ROUTES[0];
   const onForecast = route.path === "/";
   const state = useMemo(() => { try { return store.data ? summarize(store.data).state : null; } catch { return null; } }, [store.data]);
@@ -40,7 +59,11 @@ function Shell() {
   }, [theme]);
   // the tab title carries the live state, so a pinned tab still tells you something
   useEffect(() => { document.title = `${onForecast && state ? STATE_WORD[state] : route.title} · FlareNet`; }, [route.title, onForecast, state]);
-  useEffect(() => { window.scrollTo(0, 0); }, [route.path]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    // on a phone the tab bar scrolls sideways; keep the current tab in view
+    document.querySelector('.tabs a[aria-current="page"]')?.scrollIntoView?.({ block: "nearest", inline: "center" });
+  }, [route.path]);
   useEffect(() => {
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
@@ -75,7 +98,11 @@ function Shell() {
       <main id="view" tabIndex={-1}>
         <Routes>
           <Route path="/" element={<Forecast store={store} />} />
+          <Route path="/history" element={<History store={store} />} />
+          <Route path="/alerts" element={<Alerts store={store} alerts={alerts} />} />
+          <Route path="/explain" element={<Explain store={store} />} />
           <Route path="/results" element={<Results />} />
+          <Route path="/dataset" element={<Dataset store={store} />} />
           <Route path="/analyze" element={<Analyze />} />
           <Route path="/about" element={<About store={store} />} />
           <Route path="*" element={<Forecast store={store} />} />

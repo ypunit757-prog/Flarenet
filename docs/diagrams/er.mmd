@@ -1,0 +1,42 @@
+erDiagram
+  ALERT_EVENT {
+    text id PK
+    text kind "predicted_risk or observed_flare"
+    text type "started, ended, observed"
+    text time "UTC"
+    real p "forecast score"
+    real threshold
+    text level "sensitive, balanced, strict"
+    text class "flare class (observed)"
+    text forecast "WARNED, MISSED, NO COVERAGE"
+    real lead_min
+    int notified
+    text detail "full JSON record"
+    text stored_at
+  }
+  META {
+    text key PK
+    text value
+  }
+  FORWARD_LOG_DAY {
+    text day PK "UTC date"
+    real p "daily forecast"
+    real threshold
+    bool alert
+    bool resolved
+    bool flare "M flare occurred"
+  }
+  FORECAST_SNAPSHOT ||--o{ FLARE : lists
+  FORECAST_SNAPSHOT {
+    text generated
+    bool demo
+    text period_start
+    text period_end
+  }
+  FLARE {
+    text peak
+    text class
+    text forecast
+    real lead_min
+  }
+  FORECAST_SNAPSHOT ||--o{ ALERT_EVENT : "may trigger"

@@ -1,0 +1,29 @@
+# The whole site on one machine: API on :8000, dashboard on :8080.
+#   docker compose up --build
+# Without FORECAST_URL the API serves its bundled simulated demo (the page says so). To use real forecasts, copy
+# backend/.env.example to backend/.env, fill it in, and uncomment env_file below.
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      FRONTEND_ORIGIN: http://localhost:8080
+    # env_file: backend/.env
+    volumes:
+      - alerts-db:/srv/db
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8000
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  alerts-db:

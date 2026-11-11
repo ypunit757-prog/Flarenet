@@ -1,0 +1,31 @@
+flowchart LR
+  subgraph Sources["Data sources"]
+    SWPC["NOAA SWPC<br/>live GOES X-ray feed"]
+    NCEI["NOAA NCEI / NASA<br/>GOES archive (training)"]
+    NOAAT["NOAA text products<br/>sunspot regions, daily forecast"]
+  end
+  subgraph Gha["GitHub Actions (every 30 min)"]
+    EXP["export_web.py<br/>CNN-BiLSTM + tree stack<br/>+ explanation"]
+    ALR["process_alerts.py<br/>alert rules"]
+  end
+  DATA[("data branch<br/>forecast.json<br/>alerts.json<br/>alert_state.json")]
+  MAIL["E-mail (SMTP)"]
+  subgraph Api["Render: FastAPI"]
+    CACHE["validate + cache"]
+    DB[("SQLite<br/>alert events")]
+    ADM["admin endpoints<br/>(API key)"]
+  end
+  subgraph Web["Vercel: React dashboard"]
+    PAGES["Forecast, History, Alerts,<br/>Explain, Results, Data,<br/>Analyze, About"]
+    NOTE["browser notifications"]
+  end
+  SWPC --> EXP
+  NCEI -. "offline training" .-> EXP
+  NOAAT -. "daily forecaster" .-> EXP
+  EXP --> ALR --> DATA
+  ALR --> MAIL
+  DATA --> CACHE --> DB
+  CACHE --> PAGES
+  DB --> PAGES
+  PAGES --> NOTE
+  ADM --- CACHE

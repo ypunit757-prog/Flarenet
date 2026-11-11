@@ -37,7 +37,8 @@ def file_sha256(path: str | Path) -> str:
 
 
 def package(gbm, stack: Stack | None, thresholds: dict, levels: dict | None, horizon_min: int,
-            checkpoint_sha256: str | None, check: dict | None, dropped: list[str]) -> dict:  # fmt: skip
+            checkpoint_sha256: str | None, check: dict | None, dropped: list[str],
+            reference: dict | None = None) -> dict:  # fmt: skip
     import sklearn
 
     return {
@@ -45,6 +46,7 @@ def package(gbm, stack: Stack | None, thresholds: dict, levels: dict | None, hor
         "alert_levels": levels or {}, "horizon_min": int(horizon_min), "min_history_h": MIN_HISTORY_H,
         "checkpoint_sha256": checkpoint_sha256, "selfcheck": check, "features_dropped": dropped,
         "sklearn_version": sklearn.__version__,
+        "reference": reference,  # median feature row of the validation windows: the "typical window" of the explanations
     }  # fmt: skip
 
 
@@ -57,6 +59,7 @@ class LiveStack:
     horizon_min: int
     min_history_h: float
     sklearn_version: str = ""
+    reference: pd.Series | None = None  # a typical feature row, for flarenet.explain
 
     @property
     def threshold(self) -> float:
@@ -131,8 +134,14 @@ def load_live_stack(path: str | Path, checkpoint_path: str | Path) -> tuple[Live
         if not np.allclose(got, np.asarray(chk["p_gbm"]), atol=1e-5):
             return None, (f"its predictions differ on this machine (scikit-learn {_sk()} here, "
                           f"{pkg.get('sklearn_version')} when fitted)")  # fmt: skip
+    ref = pkg.get("reference")
+    if (
+        ref is None and chk
+    ):  # files made before the reference was stored: the median of the 8 self-check rows
+        ref = chk["X"].median().to_dict()
+    reference = pd.Series(ref, dtype=float) if ref else None
     return LiveStack(pkg["gbm"], pkg["stack"], pkg["thresholds"], pkg.get("alert_levels") or {},
-                     int(pkg["horizon_min"]), float(pkg["min_history_h"]), pkg.get("sklearn_version", "")), ""  # fmt: skip
+                     int(pkg["horizon_min"]), float(pkg["min_history_h"]), pkg.get("sklearn_version", ""), reference), ""  # fmt: skip
 
 
 def _sk() -> str:

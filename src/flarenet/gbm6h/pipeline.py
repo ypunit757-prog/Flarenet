@@ -129,7 +129,8 @@ def fit_and_evaluate(
     pick = np.linspace(0, len(v_gbm) - 1, min(8, len(v_gbm))).astype(int)
     check = {"X": v_tab.iloc[pick].reset_index(drop=True), "p_gbm": v_gbm[pick]}
     sha = file_sha256(checkpoint_path) if checkpoint_path else None
-    pkg = package(gbm, stack, thr, levels, horizon, sha, check, dropped)
+    reference = v_tab[gbm.cols].median().to_dict() if gbm.cols else None
+    pkg = package(gbm, stack, thr, levels, horizon, sha, check, dropped, reference=reference)
     with open(out / "gbm6h.pkl", "wb") as f:
         pickle.dump(pkg, f)
     (out / "gbm6h_report.json").write_text(json.dumps(report, indent=2, default=float))

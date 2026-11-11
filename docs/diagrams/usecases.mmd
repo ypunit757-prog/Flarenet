@@ -1,0 +1,14 @@
+flowchart LR
+  V(["Visitor"])
+  A(["Administrator"])
+  T(["Scheduler (GitHub Actions)"])
+  V --- U1["See the latest 6-hour forecast"]
+  V --- U2["See why the score is what it is"]
+  V --- U3["Browse recent flares and the forward test"]
+  V --- U4["Configure browser alerts"]
+  V --- U5["Read model comparison and limits"]
+  V --- U6["Analyze an uploaded light curve"]
+  A --- U7["Check API status and caches"]
+  A --- U8["Force a refresh"]
+  T --- U9["Run the model on live data"]
+  T --- U10["Decide and send alerts"]

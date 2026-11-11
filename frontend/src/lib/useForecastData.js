@@ -17,9 +17,11 @@ export function useForecastData(onFallback) {
   const [state, setState] = useState({ data: null, loading: true, error: null, updated: null });
   const seq = useRef(0);
 
-  const load = useCallback(async (source) => {
+  // `background` is the timed refresh: it never shows a loading state, and a failed attempt keeps what is on screen
+  // instead of switching the page to the demo.
+  const load = useCallback(async (source, { background = false } = {}) => {
     const my = ++seq.current;
-    setState((s) => ({ ...s, loading: true, error: null }));
+    if (!background) setState((s) => ({ ...s, loading: true, error: null }));
     let data = demo, used = "demo";
     if (source === "latest") {
       try {
@@ -28,6 +30,7 @@ export function useForecastData(onFallback) {
         data = await r.json();
         used = "latest";
       } catch {
+        if (background) return;
         onFallback?.();
       }
     }
@@ -39,5 +42,5 @@ export function useForecastData(onFallback) {
   useEffect(() => { load(src); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [src]);
 
   const setSrc = (s) => { try { localStorage.setItem(KEY, s); } catch { /* ignore */ } setSrcState(s); };
-  return { ...state, src, setSrc, reload: () => load(src) };
+  return { ...state, src, setSrc, reload: () => load(src), refresh: () => load(src, { background: true }) };
 }

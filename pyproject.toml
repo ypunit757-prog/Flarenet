@@ -24,6 +24,8 @@ dependencies = [
 [project.optional-dependencies]
 # NetCDF reader for the NOAA NCEI GOES-R XRS science files (sci_xrsf-l2-avg1m_*.nc)
 netcdf = ["netCDF4>=1.6"]
+# XGBoost for scripts/compare_models.py, SHAP for scripts/explain_model.py --shap (both optional)
+ml = ["xgboost>=2.0", "shap>=0.45"]
 dev = ["pytest>=7.4", "ruff>=0.4", "netCDF4>=1.6"]
 
 [project.scripts]

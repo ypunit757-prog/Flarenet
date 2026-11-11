@@ -1,0 +1,40 @@
+classDiagram
+  class DataSource {
+    <<interface>>
+    +fetch() RawSeries
+  }
+  class RawSeries
+  class LightcurveBundle
+  class WindowSet
+  class FlareNet {
+    +forward(x) nowcast_logits, forecast_logit
+  }
+  class Ensemble
+  class Stack {
+    +predict(p_cnn, p_gbm) float
+  }
+  class AlertEngine {
+    +process(payload, state, history) events, notifications
+  }
+  class Store {
+    +add_events(events)
+    +query(limit, offset, kind, since)
+    +counts()
+  }
+  class Explainer {
+    +shapley_groups(window) effects
+    +global_importance() rows
+  }
+  DataSource <|.. SyntheticSource
+  DataSource <|.. GoesSwpcSource
+  DataSource <|.. GoesNceiSource
+  DataSource <|.. AdityaL1Source
+  DataSource --> RawSeries
+  RawSeries --> LightcurveBundle : preprocess
+  LightcurveBundle --> WindowSet : features
+  WindowSet --> FlareNet
+  Ensemble o-- FlareNet
+  Stack --> Ensemble : uses probability
+  Explainer --> Stack
+  AlertEngine --> Stack : reads score
+  AlertEngine --> Store : events

@@ -10,9 +10,11 @@ on:
 permissions:
   contents: write
 
+# Queue instead of cancelling: a run cancelled after it decided an alert but before it saved the state would announce the
+# same alert again on the next run.
 concurrency:
   group: refresh-forecast
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   refresh:
@@ -40,8 +42,28 @@ jobs:
           # it was fitted with another network checkpoint or this machine's libraries give different numbers
           STACK=""
           if [ -f models/gbm6h_live.pkl ]; then STACK="--stack models/gbm6h_live.pkl"; fi
+          # models/explain_global.json (scripts/explain_model.py) is shown on the Explainable AI page when it is committed
+          GLOBAL=""
+          if [ -f models/explain_global.json ]; then GLOBAL="--explain-global models/explain_global.json"; fi
           python scripts/export_web.py -c configs/live_swpc.yaml --checkpoint models/flarenet.pt \
-            --source swpc_live --days 7 $STACK --out out/forecast.json
+            --source swpc_live --days 7 $STACK $GLOBAL --out out/forecast.json
+      - name: Decide alerts
+        if: steps.model.outputs.ok == 'true'
+        # Optional repository variables (Settings, Secrets and variables, Variables): ALERT_LEVEL (sensitive | balanced |
+        # strict), ALERT_THRESHOLD, ALERT_COOLDOWN_MIN, SITE_URL. The alert history and state live on the data branch.
+        env:
+          ALERT_LEVEL: ${{ vars.ALERT_LEVEL }}
+          ALERT_THRESHOLD: ${{ vars.ALERT_THRESHOLD }}
+          ALERT_COOLDOWN_MIN: ${{ vars.ALERT_COOLDOWN_MIN }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          mkdir -p prev
+          git fetch origin data || true
+          for f in alert_state.json alerts.json; do
+            git show "origin/data:$f" > "prev/$f" 2>/dev/null || rm -f "prev/$f"
+          done
+          python scripts/process_alerts.py --forecast out/forecast.json --state prev/alert_state.json \
+            --history prev/alerts.json --out-dir out
       - name: Publish to the data branch
         if: steps.model.outputs.ok == 'true'
         run: |
@@ -51,5 +73,23 @@ jobs:
           if git rev-parse --verify origin/data >/dev/null 2>&1; then git checkout -B data origin/data; else git checkout --orphan data && git rm -rf . >/dev/null 2>&1 || true; fi
           cp out/forecast.json forecast.json
           git add forecast.json
+          for f in alerts.json alert_state.json; do
+            if [ -f "out/$f" ]; then cp "out/$f" "$f"; git add "$f"; fi
+          done
           git commit -m "forecast $(date -u +%FT%TZ)" || echo "nothing to commit"
           git push origin data || { git pull --rebase origin data && git push origin data; }
+          git checkout --detach "$GITHUB_SHA"   # back to the code, for the next step
+      - name: Send alert emails
+        if: steps.model.outputs.ok == 'true'
+        # Optional repository secrets: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, ALERT_EMAIL_FROM, ALERT_EMAIL_TO.
+        # Without them nothing is sent. Sent only after the alert state was saved, so one alert is never sent twice.
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_SECURITY: ${{ secrets.SMTP_SECURITY }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: python scripts/process_alerts.py --send-only out/notify.json

@@ -1,0 +1,9 @@
+flowchart LR
+  U(["User"])
+  N(["NOAA SWPC / GOES data"])
+  M(["Mail server"])
+  S(("FlareNet<br/>system"))
+  N -- "X-ray flux readings" --> S
+  S -- "forecast, explanation,<br/>history, dataset info" --> U
+  U -- "alert settings,<br/>uploaded light curve" --> S
+  S -- "alert e-mail" --> M

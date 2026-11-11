@@ -15,3 +15,11 @@ services:
         sync: false        # set to your Vercel URL, e.g. https://flarenet.vercel.app
       - key: FORECAST_URL
         sync: false        # raw URL of forecast.json on the `data` branch (see docs/DEPLOY.md)
+      - key: ALERTS_URL
+        sync: false        # raw URL of alerts.json on the `data` branch (the alert history)
+      - key: FORWARD_LOG_URL
+        sync: false        # raw URL of forward_log.csv, if you publish it (the daily forward test)
+      - key: ADMIN_API_KEY
+        generateValue: true   # protects /api/admin/*; read it in the Render dashboard
+      - key: LOG_LEVEL
+        value: INFO

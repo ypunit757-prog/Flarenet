@@ -1,3 +1,4 @@
+import ModelComparison from "./ModelComparison.jsx";
 import { CHECKS, VALIDATION } from "../lib/validation.js";
 
 const LABEL = { ok: "Shown", bad: "Not met", warn: "Pending" };
@@ -19,6 +20,7 @@ export default function Results() {
             </li>
           ))}
         </ul>
+        <ModelComparison />
         <div>
           {VALIDATION.map((v) => (
             <section className="result" key={v.key} aria-labelledby={`r-${v.key}`}>

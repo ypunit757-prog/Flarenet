@@ -25,9 +25,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from case_study import case_table  # noqa: E402
 
+from flarenet.core import jsonsafe  # noqa: E402
 from flarenet.core.config import load_config  # noqa: E402
 from flarenet.core.constants import CLASS_NAMES  # noqa: E402
 from flarenet.core.utils import resolve_device  # noqa: E402
+from flarenet.explain.live import explain_for_export  # noqa: E402
 from flarenet.gbm6h.live import load_live_stack  # noqa: E402
 from flarenet.orchestration import runner as orch  # noqa: E402
 from flarenet.pipelines import ingestion, preprocessing  # noqa: E402
@@ -60,6 +62,35 @@ def apply_stack(
         print(f"stack not used: {type(e).__name__}: {e}", file=sys.stderr)
         return fc, {"used": False, "reason": f"{type(e).__name__}: {e}"}
     return out, live.info(out)
+
+
+GLOBAL_KEYS = (
+    "generated",
+    "method",
+    "dataset",
+    "period",
+    "windows",
+    "flare_windows",
+    "trees",
+    "network",
+)
+
+
+def explain_block(lm, device, bundle, fc, live, global_path: str | None = None) -> dict:
+    """Why the newest forecast is what it is (see flarenet.explain). Like the stack, a failure here must never stop the page
+    from updating: it leaves ``{"available": false, "reason": ...}`` instead."""
+    try:
+        block = {"available": True, **explain_for_export(lm, device, bundle, fc, live)}
+    except Exception as e:  # noqa: BLE001
+        print(f"explanation not added: {type(e).__name__}: {e}", file=sys.stderr)
+        return {"available": False, "reason": f"{type(e).__name__}: {e}"}
+    if global_path:
+        try:
+            g = json.loads(Path(global_path).read_text())
+            block["global"] = {k: g[k] for k in GLOBAL_KEYS if k in g}
+        except Exception as e:  # noqa: BLE001
+            print(f"global importance not added: {type(e).__name__}: {e}", file=sys.stderr)
+    return block
 
 
 def build_payload(
@@ -178,6 +209,13 @@ def main(argv=None) -> int:
         help="stack file from scripts/gbm_6h.py --install: blend a tree model on the last 3 days of X-ray history with the "
              "network. Used only if it was fitted with this checkpoint; otherwise the network alone is shown, with the reason",
     )  # fmt: skip
+    ap.add_argument(
+        "--no-explain", action="store_true", help="leave the explanation block out of the payload"
+    )
+    ap.add_argument(
+        "--explain-global", default=None,
+        help="explain_global.json from scripts/explain_model.py: shown on the Explainable AI page next to today's explanation",
+    )  # fmt: skip
     ap.add_argument("--set", action="append", default=[], help="config override key=value")
     ap.add_argument("--out", default="frontend/public/data.json")
     a = ap.parse_args(argv)
@@ -207,9 +245,12 @@ def main(argv=None) -> int:
     payload = build_payload(bundle, lm, fc, fc_now, a.days, a.flare_class, cases, stack_info)
     if a.metrics:
         payload["metrics"] = metrics_block(a.metrics, source)
+    if not a.no_explain:
+        live = load_live_stack(a.stack, a.checkpoint)[0] if a.stack else None
+        payload["explain"] = explain_block(lm, device, bundle, fc, live, a.explain_global)
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(payload, separators=(",", ":")))
+    out.write_text(jsonsafe.dumps(payload, separators=(",", ":")))
     print(
         f"wrote {out} ({out.stat().st_size / 1024:.0f} KB): {len(payload['series']['t'])} flux points, "
         f"{len(payload['forecast']['t'])} forecasts, {len(payload['flares'])} flares >= {a.flare_class}"

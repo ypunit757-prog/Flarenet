@@ -1,0 +1,17 @@
+flowchart TB
+  N(["NOAA SWPC feed"]) --> P1["1. Ingest and validate<br/>drop non-positive and missing values"]
+  P1 -->|"1-minute flux"| P2["2. Build windows<br/>12 channels x 90 min"]
+  P2 -->|"windows"| P3["3. Forecast<br/>CNN-BiLSTM + tree stack<br/>calibrated probability"]
+  P3 -->|"score"| P4["4. Explain<br/>Shapley values by input group"]
+  P3 -->|"score"| P5["5. Decide alerts<br/>stale-data check, one per episode,<br/>cool-down"]
+  P2 -->|"flux"| P6["6. Detect observed flares<br/>NOAA-style rule"]
+  P6 --> P5
+  P3 --> D1[("forecast.json")]
+  P4 --> D1
+  P5 --> D2[("alerts.json<br/>alert_state.json")]
+  P5 --> MAIL(["E-mail"])
+  D1 --> P7["7. API: validate, cache"]
+  D2 --> P7
+  P7 --> D3[("SQLite alert store")]
+  P7 --> U(["Dashboard user"])
+  D3 --> U
